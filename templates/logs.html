@@ -1,24 +1,25 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>CronCraft Job Logs</title>
-  </head>
-  <body>
-    <h1>Logs for Job: {{.Job.Name}}</h1>
-    <a href="/">← Back to Jobs</a>
-    <table border="1" style="margin-top: 10px">
-      <tr>
-        <th>Run Time</th>
-        <th>Status</th>
-        <th>Output</th>
-      </tr>
-      {{range .Logs}}
+<head>
+  <title>CronCraft Job Logs</title>
+  <script src="https://unpkg.com/htmx.org@1.9.3"></script>
+</head>
+<body>
+  <h1>Logs for Job: {{.Job.Name}}</h1>
+  <a href="/">← Back to Jobs</a>
+  <table border="1" style="margin-top:10px;">
+    <tr>
+      <th>Run Time</th>
+      <th>Status</th>
+      <th>Output</th>
+    </tr>
+    {{range .Logs}}
       <tr>
         <td>{{.RunAt}}</td>
         <td>{{.Status}}</td>
         <td><pre>{{.Output}}</pre></td>
       </tr>
-      {{end}}
-    </table>
-  </body>
+    {{end}}
+  </table>
+</body>
 </html>

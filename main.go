@@ -68,22 +68,12 @@ func main() {
 	}
 	rows.Close()
 
-	c.AddFunc("@daily", func() {
-	rows, _ := db.Query("SELECT id FROM jobs")
-	for rows.Next() {
-		var jobID int
-		rows.Scan(&jobID)
-		pruneLogs(jobID)
-	}
-	rows.Close()
-	})
-
-
+	// HTTP Handlers
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/add", addJobHandler)
 	http.HandleFunc("/run/", runHandler)
-	http.HandleFunc("/logs/", logsHandler)
 	http.HandleFunc("/delete/", deleteHandler)
+	http.HandleFunc("/logs/", logsHandler)
 
 	fmt.Println("CronCraft running at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -97,6 +87,8 @@ func registerCron(j Job) {
 	}
 	cronMap[j.ID] = id
 }
+
+const MaxLogsPerJob = 20
 
 func runJob(id int, name, command string) {
 	runAt := time.Now().Format(time.RFC3339)
@@ -115,6 +107,17 @@ func runJob(id int, name, command string) {
 	// fmt.Printf("[%s] Job output:\n%s\n", runAt, output)
 }
 
+func pruneLogs(jobID int) {
+	db.Exec(`
+	DELETE FROM job_runs 
+	WHERE id NOT IN (
+		SELECT id FROM job_runs 
+		WHERE job_id=? 
+		ORDER BY run_at DESC 
+		LIMIT ?
+	)`, jobID, MaxLogsPerJob)
+}
+
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles("templates/index.html"))
 	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
@@ -129,29 +132,37 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func addJobHandler(w http.ResponseWriter, r *http.Request) {
-    if r.Method != "POST" {
-        http.Redirect(w, r, "/", http.StatusSeeOther)
-        return
-    }
-    name := r.FormValue("name")
-    schedule := r.FormValue("schedule")
-    command := r.FormValue("command")
+	if r.Method != "POST" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	name := r.FormValue("name")
+	schedule := r.FormValue("schedule")
+	command := r.FormValue("command")
 
-    // --- validate cron expression ---
-    _, err := cron.ParseStandard(schedule)
-    if err != nil {
-        http.Error(w, "Invalid cron expression: "+err.Error(), http.StatusBadRequest)
-        return
-    }
+	// validate cron
+	_, err := cron.ParseStandard(schedule)
+	if err != nil {
+		http.Error(w, "Invalid cron expression: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 
-    // --- insert into DB ---
-    res, _ := db.Exec("INSERT INTO jobs(name, schedule, command) VALUES(?, ?, ?)", name, schedule, command)
-    id, _ := res.LastInsertId()
-    j := Job{ID: int(id), Name: name, Schedule: schedule, Command: command}
+	res, _ := db.Exec("INSERT INTO jobs(name, schedule, command) VALUES(?, ?, ?)", name, schedule, command)
+	id, _ := res.LastInsertId()
+	j := Job{ID: int(id), Name: name, Schedule: schedule, Command: command}
+	registerCron(j)
 
-    // --- register with scheduler ---
-    registerCron(j)
-    http.Redirect(w, r, "/", http.StatusSeeOther)
+	// For HTMX: return updated table only
+	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
+	var jobs []Job
+	for rows.Next() {
+		var job Job
+		rows.Scan(&job.ID, &job.Name, &job.Schedule, &job.Command)
+		jobs = append(jobs, job)
+	}
+	rows.Close()
+	tmpl.ExecuteTemplate(w, "jobTable", jobs)
 }
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +172,32 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 	var j Job
 	row.Scan(&j.Name, &j.Command)
 	go runJob(id, j.Name, j.Command)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	w.Write([]byte("Job running..."))
+}
+
+func deleteHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Path[len("/delete/"):]
+	id, _ := strconv.Atoi(idStr)
+
+	if entryID, ok := cronMap[id]; ok {
+		c.Remove(entryID)
+		delete(cronMap, id)
+	}
+
+	db.Exec("DELETE FROM jobs WHERE id=?", id)
+	db.Exec("DELETE FROM job_runs WHERE job_id=?", id)
+
+	// For HTMX: return updated table only
+	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
+	var jobs []Job
+	for rows.Next() {
+		var job Job
+		rows.Scan(&job.ID, &job.Name, &job.Schedule, &job.Command)
+		jobs = append(jobs, job)
+	}
+	rows.Close()
+	tmpl.ExecuteTemplate(w, "jobTable", jobs)
 }
 
 func logsHandler(w http.ResponseWriter, r *http.Request) {
@@ -182,38 +218,4 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 
 	tmpl := template.Must(template.ParseFiles("templates/logs.html"))
 	tmpl.Execute(w, map[string]interface{}{"Job": j, "Logs": logs})
-}
-
-func deleteHandler(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Path[len("/delete/"):]
-	id, _ := strconv.Atoi(idStr)
-
-	// remove from cron scheduler
-	if entryID, ok := cronMap[id]; ok {
-		c.Remove(entryID)
-		delete(cronMap, id)
-	}
-
-	// delete from DB
-	db.Exec("DELETE FROM jobs WHERE id=?", id)
-	db.Exec("DELETE FROM job_runs WHERE job_id=?", id)
-
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-const MaxLogsPerJob = 5
-
-func pruneLogs(jobID int) {
-	_, err := db.Exec(`
-	DELETE FROM job_runs 
-	WHERE id NOT IN (
-		SELECT id FROM job_runs 
-		WHERE job_id=? 
-		ORDER BY run_at DESC 
-		LIMIT ?
-	)
-	`, jobID, MaxLogsPerJob)
-	if err != nil {
-		fmt.Println("Error pruning logs:", err)
-	}
 }
