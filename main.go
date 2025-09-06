@@ -132,7 +132,7 @@ func pruneLogs(jobID int) {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	tmpl := template.Must(template.ParseFS(templatesFS, "templates/index.html"))
 	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
 	var jobs []Job
 	for rows.Next() {
@@ -166,7 +166,7 @@ func addJobHandler(w http.ResponseWriter, r *http.Request) {
 	registerCron(j)
 
 	// For HTMX: return updated table only
-	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	tmpl := template.Must(template.ParseFS(templatesFS, "templates/index.html"))
 	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
 	var jobs []Job
 	for rows.Next() {
