@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>CronCraft Jobs</title>
+  </head>
+  <body>
+    <h1>CronCraft Jobs</h1>
+
+    <h2>Add Job</h2>
+    <form method="POST" action="/add">
+      Name: <input type="text" name="name" required /> Schedule:
+      <input type="text" name="schedule" required /> Command:
+      <input type="text" name="command" required />
+      <button type="submit">Add Job</button>
+    </form>
+
+    <h2>Jobs</h2>
+    <table border="1">
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Schedule</th>
+        <th>Command</th>
+        <th>Actions</th>
+      </tr>
+      {{range .Jobs}}
+      <tr>
+        <td>{{.ID}}</td>
+        <td>{{.Name}}</td>
+        <td>{{.Schedule}}</td>
+        <td>{{.Command}}</td>
+        <td>
+          <form style="display: inline" method="POST" action="/run/{{.ID}}">
+            <button type="submit">Run Now</button>
+          </form>
+          <form style="display: inline" method="POST" action="/delete/{{.ID}}">
+            <button type="submit" onclick="return confirm('Delete this job?');">
+              Delete
+            </button>
+          </form>
+          <a href="/logs/{{.ID}}">View Logs</a>
+        </td>
+      </tr>
+      {{end}}
+    </table>
+  </body>
+</html>
