@@ -1,30 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>CronCraft Jobs</title>
+  <link rel="stylesheet" href="/style.css">
   <script src="https://unpkg.com/htmx.org@1.9.3"></script>
 </head>
 <body>
-  <h1>CronCraft Jobs</h1>
+  <div class="container">
+    <h1>CronCraft Jobs</h1>
+<details>
+  <summary>Add New Job</summary>
+    <div class="card">
+      <h2>Add Job</h2>
+      <form hx-post="/add" hx-target="#job-list" hx-swap="innerHTML">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" required>
 
-  <h2>Add Job</h2>
-  <form hx-post="/add" hx-target="#job-list" hx-swap="innerHTML">
-    Name: <input type="text" name="name" required>
-    Schedule: <input type="text" name="schedule" required>
-    Command: <input type="text" name="command" required>
-    <button type="submit">Add Job</button>
-  </form>
+        <label for="schedule">Schedule:</label>
+        <input type="text" id="schedule" name="schedule" required>
 
-  <h2>Jobs</h2>
-  <div id="job-list">
-    {{template "jobTable" .Jobs}}
+        <label for="command">Command:</label>
+        <input type="text" id="command" name="command" required>
+
+        <button type="submit">Add Job</button>
+      </form>
+    </div>
+</details>
+    <div class="card">
+      <h2>Jobs</h2>
+      <div id="job-list">
+        {{template "jobTable" .Jobs}}
+      </div>
+    </div>
   </div>
 
   <!-- Job Table Template -->
   {{define "jobTable"}}
-  <table border="1">
-    <tr><th>ID</th><th>Name</th><th>Schedule</th><th>Command</th><th>Actions</th></tr>
-    {{range .}}
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Schedule</th>
+        <th>Command</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .}}
       <tr id="job-{{.ID}}">
         <td>{{.ID}}</td>
         <td>{{.Name}}</td>
@@ -32,14 +56,17 @@
         <td>{{.Command}}</td>
         <td>
           <button hx-post="/run/{{.ID}}" hx-target="#output-{{.ID}}" hx-swap="innerHTML">Run Now</button>
+
           <form style="display:inline;" hx-post="/delete/{{.ID}}" hx-target="#job-list" hx-swap="innerHTML">
             <button onclick="return confirm('Delete this job?');">Delete</button>
           </form>
+
           <a href="/logs/{{.ID}}">View Logs</a>
           <div id="output-{{.ID}}"></div>
         </td>
       </tr>
-    {{end}}
+      {{end}}
+    </tbody>
   </table>
   {{end}}
 </body>

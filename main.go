@@ -87,6 +87,26 @@ func main() {
 	// Load existing jobs
 	loadJobs()
 
+	http.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css")
+
+		// --- Dev mode: external file ---
+		// data, err := os.ReadFile("templates/style.css")
+		// if err != nil {
+		// 	http.Error(w, "CSS not found on disk", http.StatusInternalServerError)
+		// 	return
+		// }
+		// w.Write(data)
+
+		// --- Production: embedded ---
+		data, err := templatesFS.ReadFile("templates/style.css")
+		if err != nil {
+			http.Error(w, "Embedded CSS not found", http.StatusInternalServerError)
+			return
+		}
+		w.Write(data)
+	})
+
 	// HTTP Handlers
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/add", addJobHandler)

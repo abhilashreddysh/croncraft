@@ -1,0 +1,132 @@
+/* =====================
+   Reset / Base
+   ===================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #121212;
+    color: #e0e0e0;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 20px;
+}
+
+/* =====================
+   Headings
+   ===================== */
+h1, h2 {
+    color: #ffffff;
+    margin-bottom: 12px;
+}
+
+/* =====================
+   Tables
+   ===================== */
+table {
+    border-collapse: collapse;
+    width: 100%;
+    background-color: #1e1e1e;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+th, td {
+    padding: 10px 12px;
+    text-align: left;
+}
+
+th {
+    background-color: #333333;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+tr:nth-child(even) {
+    background-color: #2a2a2a;
+}
+
+tr:hover {
+    background-color: #333333;
+}
+
+/* =====================
+   Buttons
+   ===================== */
+button {
+    padding: 6px 12px;
+    margin: 2px;
+    background-color: #555555;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #777777;
+}
+
+/* =====================
+   Links
+   ===================== */
+a {
+    color: #e0e0e0;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* =====================
+   Form Elements
+   ===================== */
+input, textarea, select {
+    padding: 8px 10px;
+    margin: 4px 0;
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    font-size: 14px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: #888888;
+    background-color: #272727;
+}
+
+/* =====================
+   Labels
+   ===================== */
+label {
+    display: block;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+/* =====================
+   Containers / Cards
+   ===================== */
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.card {
+    background-color: #1e1e1e;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 6px;
+}

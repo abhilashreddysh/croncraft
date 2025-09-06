@@ -1,25 +1,36 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>CronCraft Job Logs</title>
+  <link rel="stylesheet" href="/style.css">
   <script src="https://unpkg.com/htmx.org@1.9.3"></script>
 </head>
 <body>
-  <h1>Logs for Job: {{.Job.Name}}</h1>
-  <a href="/">← Back to Jobs</a>
-  <table border="1" style="margin-top:10px;">
-    <tr>
-      <th>Run Time</th>
-      <th>Status</th>
-      <th>Output</th>
-    </tr>
-    {{range .Logs}}
-      <tr>
-        <td>{{.RunAt}}</td>
-        <td>{{.Status}}</td>
-        <td><pre>{{.Output}}</pre></td>
-      </tr>
-    {{end}}
-  </table>
+  <div class="container">
+    <div class="card">
+      <h1>Logs for Job: {{.Job.Name}}</h1>
+      <a href="/">← Back to Jobs</a>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Run Time</th>
+            <th>Status</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Logs}}
+          <tr>
+            <td>{{.RunAt}}</td>
+            <td>{{.Status}}</td>
+            <td><pre>{{.Output}}</pre></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </body>
 </html>
