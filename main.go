@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"time"
@@ -14,6 +15,9 @@ import (
 	"github.com/robfig/cron/v3"
 	_ "modernc.org/sqlite"
 )
+
+//go:embed templates/*
+var templatesFS embed.FS
 
 type Job struct {
 	ID       int
@@ -31,55 +35,57 @@ type Run struct {
 var db *sql.DB
 var c *cron.Cron
 var cronMap map[int]cron.EntryID
-var templatesFS embed.FS
+
+const dbFile = "croncraft.db"
+const MaxLogsPerJob = 20
 
 func main() {
+	// Ensure DB exists
+	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
+		f, err := os.Create(dbFile)
+		if err != nil {
+			log.Fatalf("Failed to create DB file: %v", err)
+		}
+		f.Close()
+	}
+
 	var err error
-	db, err = sql.Open("sqlite", "croncraft.db")
+	db, err = sql.Open("sqlite", dbFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	// tables
-	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS jobs (
+	// Create tables if not exist
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS jobs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT,
 		schedule TEXT,
 		command TEXT
 	)`)
-	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS job_runs (
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS job_runs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		job_id INTEGER,
 		run_at TEXT,
 		status TEXT,
 		output TEXT
 	)`)
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	// Initialize cron
 	c = cron.New()
 	cronMap = make(map[int]cron.EntryID)
 	c.Start()
 	defer c.Stop()
 
-	// load existing jobs
-	rows, err := db.Query("SELECT id, name, schedule, command FROM jobs")
-	if err != nil {
-		log.Fatalf("Failed to query jobs: %v", err) // fatal error if query fails
-	}
-	defer rows.Close() // ensure rows are closed
-
-	for rows.Next() {
-		var j Job
-		if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command); err != nil {
-			log.Printf("Failed to scan job row: %v", err)
-			continue // skip this row but continue
-		}
-		registerCron(j)
-	}
-
-	if err := rows.Err(); err != nil {
-		log.Printf("Error during rows iteration: %v", err)
-	}
+	// Load existing jobs
+	loadJobs()
 
 	// HTTP Handlers
 	http.HandleFunc("/", indexHandler)
@@ -92,20 +98,39 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
+func loadJobs() {
+	rows, err := db.Query("SELECT id, name, schedule, command FROM jobs")
+	if err != nil {
+		log.Printf("Failed to query jobs: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var j Job
+		if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command); err != nil {
+			log.Printf("Failed to scan job row: %v", err)
+			continue
+		}
+		registerCron(j)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("Error during rows iteration: %v", err)
+	}
+}
+
 func registerCron(j Job) {
 	id, err := c.AddFunc(j.Schedule, func() { runJob(j.ID, j.Name, j.Command) })
 	if err != nil {
-		fmt.Println("Invalid cron for job:", j.Name, j.Schedule)
+		log.Printf("Invalid cron for job %s: %s", j.Name, j.Schedule)
 		return
 	}
 	cronMap[j.ID] = id
 }
 
-const MaxLogsPerJob = 20
-
 func runJob(id int, name, command string) {
 	runAt := time.Now().Format(time.RFC3339)
-	fmt.Printf("[%s] Running job: %s\n", runAt, name)
+	log.Printf("[%s] Running job: %s", runAt, name)
 
 	cmd := exec.Command("sh", "-c", command)
 	out, err := cmd.CombinedOutput()
@@ -115,13 +140,15 @@ func runJob(id int, name, command string) {
 	}
 	output := string(out)
 
-	db.Exec("INSERT INTO job_runs(job_id, run_at, status, output) VALUES(?, ?, ?, ?)", id, runAt, status, output)
+	_, err = db.Exec("INSERT INTO job_runs(job_id, run_at, status, output) VALUES(?, ?, ?, ?)", id, runAt, status, output)
+	if err != nil {
+		log.Printf("Failed to insert job run: %v", err)
+	}
 	pruneLogs(id)
-	// fmt.Printf("[%s] Job output:\n%s\n", runAt, output)
 }
 
 func pruneLogs(jobID int) {
-	db.Exec(`
+	_, err := db.Exec(`
 	DELETE FROM job_runs 
 	WHERE id NOT IN (
 		SELECT id FROM job_runs 
@@ -129,18 +156,29 @@ func pruneLogs(jobID int) {
 		ORDER BY run_at DESC 
 		LIMIT ?
 	)`, jobID, MaxLogsPerJob)
+	if err != nil {
+		log.Printf("Failed to prune logs for job %d: %v", jobID, err)
+	}
 }
+
+// Handlers
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFS(templatesFS, "templates/index.html"))
-	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
+	rows, err := db.Query("SELECT id, name, schedule, command FROM jobs")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("DB error: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
 	var jobs []Job
 	for rows.Next() {
 		var j Job
 		rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command)
 		jobs = append(jobs, j)
 	}
-	rows.Close()
+
 	tmpl.Execute(w, map[string]interface{}{"Jobs": jobs})
 }
 
@@ -153,29 +191,23 @@ func addJobHandler(w http.ResponseWriter, r *http.Request) {
 	schedule := r.FormValue("schedule")
 	command := r.FormValue("command")
 
-	// validate cron
 	_, err := cron.ParseStandard(schedule)
 	if err != nil {
 		http.Error(w, "Invalid cron expression: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	res, _ := db.Exec("INSERT INTO jobs(name, schedule, command) VALUES(?, ?, ?)", name, schedule, command)
+	res, err := db.Exec("INSERT INTO jobs(name, schedule, command) VALUES(?, ?, ?)", name, schedule, command)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to add job: %v", err), http.StatusInternalServerError)
+		return
+	}
 	id, _ := res.LastInsertId()
 	j := Job{ID: int(id), Name: name, Schedule: schedule, Command: command}
 	registerCron(j)
 
-	// For HTMX: return updated table only
-	tmpl := template.Must(template.ParseFS(templatesFS, "templates/index.html"))
-	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
-	var jobs []Job
-	for rows.Next() {
-		var job Job
-		rows.Scan(&job.ID, &job.Name, &job.Schedule, &job.Command)
-		jobs = append(jobs, job)
-	}
-	rows.Close()
-	tmpl.ExecuteTemplate(w, "jobTable", jobs)
+	// return updated table for HTMX or redirect
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
@@ -200,17 +232,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	db.Exec("DELETE FROM jobs WHERE id=?", id)
 	db.Exec("DELETE FROM job_runs WHERE job_id=?", id)
 
-	// For HTMX: return updated table only
-	tmpl := template.Must(template.ParseFS(templatesFS, "templates/index.html"))
-	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
-	var jobs []Job
-	for rows.Next() {
-		var job Job
-		rows.Scan(&job.ID, &job.Name, &job.Schedule, &job.Command)
-		jobs = append(jobs, job)
-	}
-	rows.Close()
-	tmpl.ExecuteTemplate(w, "jobTable", jobs)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func logsHandler(w http.ResponseWriter, r *http.Request) {
@@ -221,13 +243,14 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	row.Scan(&j.ID, &j.Name)
 
 	rows, _ := db.Query("SELECT run_at, status, output FROM job_runs WHERE job_id=? ORDER BY run_at DESC", id)
+	defer rows.Close()
+
 	var logs []Run
 	for rows.Next() {
 		var logEntry Run
 		rows.Scan(&logEntry.RunAt, &logEntry.Status, &logEntry.Output)
 		logs = append(logs, logEntry)
 	}
-	rows.Close()
 
 	tmpl := template.Must(template.ParseFS(templatesFS, "templates/logs.html"))
 	tmpl.Execute(w, map[string]interface{}{"Job": j, "Logs": logs})
