@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
 	"html/template"
 	"log"
@@ -30,6 +31,7 @@ type Run struct {
 var db *sql.DB
 var c *cron.Cron
 var cronMap map[int]cron.EntryID
+var templatesFS embed.FS
 
 func main() {
 	var err error
@@ -199,7 +201,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	db.Exec("DELETE FROM job_runs WHERE job_id=?", id)
 
 	// For HTMX: return updated table only
-	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	tmpl := template.Must(template.ParseFS(templatesFS, "templates/index.html"))
 	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
 	var jobs []Job
 	for rows.Next() {
@@ -227,6 +229,6 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
-	tmpl := template.Must(template.ParseFiles("templates/logs.html"))
+	tmpl := template.Must(template.ParseFS(templatesFS, "templates/logs.html"))
 	tmpl.Execute(w, map[string]interface{}{"Job": j, "Logs": logs})
 }
