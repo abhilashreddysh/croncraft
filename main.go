@@ -60,13 +60,24 @@ func main() {
 	defer c.Stop()
 
 	// load existing jobs
-	rows, _ := db.Query("SELECT id, name, schedule, command FROM jobs")
+	rows, err := db.Query("SELECT id, name, schedule, command FROM jobs")
+	if err != nil {
+		log.Fatalf("Failed to query jobs: %v", err) // fatal error if query fails
+	}
+	defer rows.Close() // ensure rows are closed
+
 	for rows.Next() {
 		var j Job
-		rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command)
+		if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command); err != nil {
+			log.Printf("Failed to scan job row: %v", err)
+			continue // skip this row but continue
+		}
 		registerCron(j)
 	}
-	rows.Close()
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error during rows iteration: %v", err)
+	}
 
 	// HTTP Handlers
 	http.HandleFunc("/", indexHandler)
