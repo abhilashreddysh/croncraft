@@ -8,6 +8,7 @@ type Job struct {
 }
 
 type Run struct {
+	ID     int
 	RunAt  string
 	Status string
 	Output string

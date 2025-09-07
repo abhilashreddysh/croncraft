@@ -1,47 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=1024">
-  <title>Logs - {{.Job.Name}} - CronCraft</title>
-  <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-  <main class="container">
-    <h1>Logs for: {{.Job.Name}}</h1>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Logs - {{.Job.Name}} - CronCraft</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>{{.Job.Name}} Logs</h1>
 
-    <p>
-      <a href="/" role="button" class="secondary">← Back to Jobs</a>
-    </p>
+      <p>
+        <a href="/" style="color: var(--accent)">← Back to Home</a>
+      </p>
 
-    {{if .Logs}}
-    <table>
-      <thead>
-        <tr>
-          <th>Run At</th>
-          <th>Status</th>
-          <th>Output</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Logs}}
-        <tr>
-          <td>{{.RunAt}}</td>
-          <td>
-            <span class="status {{.Status}}">
-              {{.Status}}
-            </span>
-          </td>
-          <td>
-            <pre>{{.Output}}</pre>
-          </td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}
-    <p>No logs available for this job.</p>
-    {{end}}
-  </main>
-</body>
+      {{if .Logs}}
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Run At</th>
+            <th>Status</th>
+            <th>Output</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Logs}}
+          <tr>
+            <td>{{.ID}}</td>
+            <td>{{.RunAt}}</td>
+            <td><span class="status {{.Status}}">{{.Status}}</span></td>
+            <td>
+              <a href="/logs/{{.ID}}/output">View Logs</a> |
+              <a href="/logs/{{.ID}}/output?download=1">Download</a>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p>No logs available for this job.</p>
+      {{end}}
+    </main>
+  </body>
 </html>

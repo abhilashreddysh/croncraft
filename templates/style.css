@@ -1,145 +1,78 @@
-
-/* Minimal CSS variables */
 :root {
-    --bg-primary: #101010;
-    --bg-secondary: #2d2d2d;
-    --text-primary: #f0f0f0;
-    --text-secondary: #a0a0a0;
-    --accent: #6b8eeb;
-    --accent-hover: #7d9eeb;
-    --border: #444;
+  --background-primary: #031926;
+  --text-primary: #fbfef9;
+  --accent: #20a4f3;
+  --status-success: #7fb800;
+  --status-failed: #f6511d;
+  --status-running: #ffb400;
 }
-
-/* Basic reset */
 * {
-    box-sizing: border-box;
+  background: var(--background-primary);
+  color: var(--text-primary);
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
 }
-
-body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    line-height: 1.6;
-    padding: 1rem;
-    margin: 0;
-    max-width: 1000px;
-    margin: 0 auto;
+h1,
+h2,
+h3 {
+  text-transform: capitalize;
 }
-
-/* Typography enhancements */
-h1, h2, h3 {
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
-}
-
-h1 {
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 0.5rem;
-}
-
-/* Navigation */
 nav {
-    background-color: var(--bg-secondary);
-    padding: 1rem;
-    border-radius: 5px;
-    margin-bottom: 2rem;
-    display: flex;
-    justify-content: space-between;
+  display: flex;
+  justify-content: space-between;
+  padding: 1em 0;
 }
-
-nav ul {
-    display: flex;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    gap: 1.5rem;
-    align-items: center;
-}
-
-nav a {
-    color: var(--text-primary);
-    text-decoration: none;
-    padding: 0.5rem 1rem;
-    background-color: var(--accent);
-    border-radius: 4px;
-}
-
-nav a:hover {
-    background-color: var(--accent-hover);
-}
-
-/* Forms */
-input, select, textarea {
-    background-color: var(--bg-secondary);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    padding: 0.5rem;
-    border-radius: 4px;
-    width: 100%;
-    margin-bottom: 1rem;
-}
-
-button {
-    background-color: var(--accent);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-button:hover {
-    background-color: var(--accent-hover);
-}
-
-/* Tables */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-}
-
-th, td {
-    padding: 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-}
-
-th {
-    background-color: var(--bg-secondary);
-}
-
-/* Code blocks */
-code, pre {
-    background-color: var(--bg-secondary);
-    padding: 0.5rem;
-    border-radius: 4px;
-    overflow: auto;
-}
-
-/* Links */
 a {
-    color: var(--accent);
+  text-decoration: none;
+  color: var(--accent);
 }
-
 a:hover {
-    text-decoration: none;
+  text-decoration: underline;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  border: 1px solid var(--text-primary);
+  padding: 0.5rem;
+  text-align: left;
+}
+th {
+  text-align: center;
+  font-weight: bolder;
+  color: var(--accent);
+}
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 400px;
+}
+label {
+  font-weight: bold;
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
-    nav {
-        flex-direction: column;
-        gap: 1rem;
-    }
-    
-    nav ul {
-        flex-direction: column;
-        gap: 0.5rem;
-        width: 100%;
-    }
-    
-    nav a {
-        display: block;
-        text-align: center;
-    }
+input,
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+button {
+  border: none;
+  cursor: pointer;
+}
+button:hover {
+  text-decoration: underline;
+}
+.status.success {
+  color: var(--status-success);
+}
+.status.failed {
+  color: var(--status-failed);
+}
+.status.running {
+  color: var(--status-running);
 }

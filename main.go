@@ -10,7 +10,7 @@ import (
 
 const (
 	dbFile        = "croncraft.db"
-	MaxLogsPerJob = 20
+	MaxLogsPerJob = 10
 	serverPort    = ":8080"
 )
 

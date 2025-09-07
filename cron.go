@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
+	"io"
 	"log"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -49,35 +53,115 @@ func registerCron(j Job) {
 	mu.Unlock()
 }
 
-func runJob(id int, name, command string) {
-	runAt := time.Now().Format(time.RFC3339)
-	log.Printf("[%s] Running job: %s", runAt, name)
+func runJob(jobID int, name, command string) {
+    runAt := time.Now().Format(time.RFC3339)
+    const maxDBOutput = 500 * 1024       // 500 KB preview in DB
+    const batchInterval = 2 * time.Second
 
-	cmd := exec.Command("sh", "-c", command)
-	out, err := cmd.CombinedOutput()
+    var runRowID int64
+    err := retryDBOperation(func() error {
+        res, err := db.Exec(
+            "INSERT INTO job_runs (job_id, run_at, status, output) VALUES (?, ?, ?, ?)",
+            jobID, runAt, "running", "",
+        )
+        if err != nil {
+            return err
+        }
+        runRowID, err = res.LastInsertId()
+        return err
+    })
+    if err != nil {
+        log.Printf("[%s] Failed to insert running job %s: %v", runAt, name, err)
+        return
+    }
 
-	status := "success"
+    log.Printf("[%s] Running job: %s", runAt, name)
+
+
+	logDir := "./logs"
+
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Printf("[%s] Failed to create log directory for job %s: %v", runAt, name, err)
+		return
+	}
+
+	logFilePath := fmt.Sprintf("%s/%d.log", logDir, runRowID)
+	f, err := os.Create(logFilePath)
 	if err != nil {
-		status = "failed"
-		log.Printf("[%s] Job %s failed: %v", runAt, name, err)
+		log.Printf("[%s] Failed to create log file for job %s: %v", runAt, name, err)
+		return
 	}
+	defer f.Close()
 
-	output := string(out)
-	if len(output) > 10000 { // Limit output size
-		output = output[:10000] + "... (truncated)"
-	}
+    cmd := exec.Command("sh", "-c", command)
+    stdoutPipe, _ := cmd.StdoutPipe()
+    stderrPipe, _ := cmd.StderrPipe()
+    reader := io.MultiReader(stdoutPipe, stderrPipe)
 
-	// Use retry logic for saving job run
-	if err := retryDBOperation(func() error {
-		return saveJobRun(id, runAt, status, output)
-	}); err != nil {
-		log.Printf("Failed to save job run after retries: %v", err)
-	}
+    if err := cmd.Start(); err != nil {
+        log.Printf("[%s] Failed to start job %s: %v", runAt, name, err)
+        return
+    }
 
-	// Use retry logic for pruning logs
-	if err := retryDBOperation(func() error {
-		return pruneLogs(id)
-	}); err != nil {
-		log.Printf("Failed to prune logs for job %d after retries: %v", id, err)
-	}
+    scanner := bufio.NewScanner(reader)
+    buf := make([]byte, 0, 1024*1024)
+    scanner.Buffer(buf, 10*1024*1024) // handle long lines
+
+    var outputDB string
+    truncated := false
+    lastUpdate := time.Now()
+
+    for scanner.Scan() {
+        line := scanner.Text() + "\n"
+
+        // Always write to disk
+        f.WriteString(line)
+
+        // Keep preview in DB up to maxDBOutput
+        if len(outputDB) < maxDBOutput {
+            remaining := maxDBOutput - len(outputDB)
+            if len(line) > remaining {
+                outputDB += line[:remaining]
+                truncated = true
+            } else {
+                outputDB += line
+            }
+        } else {
+            truncated = true
+        }
+
+        // Batch update DB every 2 seconds
+        if time.Since(lastUpdate) > batchInterval {
+            tempOutput := outputDB
+            if truncated {
+                tempOutput += "... (truncated)\n"
+            }
+            _ = retryDBOperation(func() error {
+                _, err := db.Exec("UPDATE job_runs SET output = ? WHERE id = ?", tempOutput, runRowID)
+                return err
+            })
+            lastUpdate = time.Now()
+        }
+    }
+
+    err = cmd.Wait()
+    status := "success"
+    if err != nil {
+        status = "failed"
+        log.Printf("[%s] Job %s failed: %v", runAt, name, err)
+    }
+
+    finalOutput := outputDB
+    if truncated {
+        finalOutput += "... (truncated)\n"
+    }
+    _ = retryDBOperation(func() error {
+        _, err := db.Exec("UPDATE job_runs SET status = ?, output = ? WHERE id = ?", status, finalOutput, runRowID)
+        return err
+    })
+
+    _ = retryDBOperation(func() error {
+        return pruneLogs(jobID)
+    })
 }
+

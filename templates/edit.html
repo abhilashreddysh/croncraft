@@ -2,38 +2,46 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Add Job - CronCraft</title>
+    <title>Edit Job - CronCraft</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <main>
-      <h1>Add New Job</h1>
+      <h1>Edit Job</h1>
       <p>
         <a href="/" style="color: var(--accent)">← Back to Home</a>
       </p>
 
-      <form action="/add" method="post">
+      <form action="/edit/{{.Job.ID}}" method="post">
         <label for="name">Job Name</label>
-        <input type="text" id="name" name="name" required />
+        <input
+          type="text"
+          id="name"
+          name="name"
+          value="{{.Job.Name}}"
+          required
+        />
 
         <label for="schedule">Cron Schedule</label>
         <input
           type="text"
           id="schedule"
           name="schedule"
-          placeholder="* * * * *"
+          value="{{.Job.Schedule}}"
           required
         />
         <small>Format: minute hour day month day-of-week</small>
 
         <label for="command">Command</label>
-        <textarea id="command" name="command" rows="3" required></textarea>
+        <textarea id="command" name="command" rows="3" required>
+{{.Job.Command}}</textarea
+        >
 
         <button
           type="submit"
           style="padding: 0.5rem; background: var(--accent)"
         >
-          Add Job
+          Update Job
         </button>
       </form>
     </main>

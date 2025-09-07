@@ -105,22 +105,42 @@ func getJobsFromDB() ([]Job, error) {
 	return jobs, nil
 }
 
-func saveJobRun(jobID int, runAt, status, output string) error {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec(
-		"INSERT INTO job_runs(job_id, run_at, status, output) VALUES(?, ?, ?, ?)",
-		jobID, runAt, status, output,
-	)
-	return err
-}
-
 func pruneLogs(jobID int) error {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	_, err := db.Exec(`
+	rows, err := db.Query(`
+		SELECT id FROM job_runs 
+		WHERE id NOT IN (
+			SELECT id FROM job_runs 
+			WHERE job_id = ? 
+			ORDER BY run_at DESC 
+			LIMIT ?
+		) AND job_id = ?`,
+		jobID, MaxLogsPerJob, jobID,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var oldIDs []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		oldIDs = append(oldIDs, id)
+	}
+
+	for _, id := range oldIDs {
+		logFilePath := fmt.Sprintf("./logs/%d.log", id)
+		if err := os.Remove(logFilePath); err != nil && !os.IsNotExist(err) {
+			log.Printf("Failed to delete log file %s: %v", logFilePath, err)
+		}
+	}
+
+	_, err = db.Exec(`
 		DELETE FROM job_runs 
 		WHERE id NOT IN (
 			SELECT id FROM job_runs 
@@ -133,3 +153,4 @@ func pruneLogs(jobID int) error {
 
 	return err
 }
+
