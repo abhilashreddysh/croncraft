@@ -1,2 +1,4 @@
 croncraft.db
+croncraft.db-shm
+croncraft.db-wal
 logs/
