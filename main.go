@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -35,6 +36,7 @@ type Run struct {
 var db *sql.DB
 var c *cron.Cron
 var cronMap map[int]cron.EntryID
+var dbMu sync.Mutex
 
 const dbFile = "croncraft.db"
 const MaxLogsPerJob = 20
@@ -55,6 +57,10 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+
+	// Enable WAL and busy timeout for better concurrency
+	_, _ = db.Exec(`PRAGMA journal_mode = WAL;`)
+	_, _ = db.Exec(`PRAGMA busy_timeout = 5000;`)
 
 	// Create tables if not exist
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS jobs (
@@ -87,6 +93,10 @@ func main() {
 	// Load existing jobs
 	loadJobs()
 
+	// Add daily prune job
+	c.AddFunc("@daily", pruneAllLogs)
+
+	// Serve CSS
 	http.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css")
 
@@ -119,7 +129,7 @@ func main() {
 }
 
 func loadJobs() {
-	rows, err := db.Query("SELECT id, name, schedule, command FROM jobs")
+	rows, err := safeQuery("SELECT id, name, schedule, command FROM jobs")
 	if err != nil {
 		log.Printf("Failed to query jobs: %v", err)
 		return
@@ -160,15 +170,32 @@ func runJob(id int, name, command string) {
 	}
 	output := string(out)
 
-	_, err = db.Exec("INSERT INTO job_runs(job_id, run_at, status, output) VALUES(?, ?, ?, ?)", id, runAt, status, output)
+	err = safeExec("INSERT INTO job_runs(job_id, run_at, status, output) VALUES(?, ?, ?, ?)", id, runAt, status, output)
 	if err != nil {
 		log.Printf("Failed to insert job run: %v", err)
 	}
-	pruneLogs(id)
+}
+
+// pruneAllLogs runs once a day for all jobs
+func pruneAllLogs() {
+	log.Println("Running daily log pruning...")
+	rows, err := safeQuery("SELECT id FROM jobs")
+	if err != nil {
+		log.Printf("Failed to list jobs for pruning: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var jobID int
+		if err := rows.Scan(&jobID); err == nil {
+			pruneLogs(jobID)
+		}
+	}
 }
 
 func pruneLogs(jobID int) {
-	_, err := db.Exec(`
+	err := safeExec(`
 	DELETE FROM job_runs 
 	WHERE id NOT IN (
 		SELECT id FROM job_runs 
@@ -181,11 +208,32 @@ func pruneLogs(jobID int) {
 	}
 }
 
-// Handlers
+// ===================== DB Wrappers =====================
+
+func safeExec(query string, args ...any) error {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	_, err := db.Exec(query, args...)
+	return err
+}
+
+func safeQuery(query string, args ...any) (*sql.Rows, error) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	return db.Query(query, args...)
+}
+
+func safeQueryRow(query string, args ...any) *sql.Row {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	return db.QueryRow(query, args...)
+}
+
+// ===================== HTTP Handlers =====================
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFS(templatesFS, "templates/index.html"))
-	rows, err := db.Query("SELECT id, name, schedule, command FROM jobs")
+	rows, err := safeQuery("SELECT id, name, schedule, command FROM jobs")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("DB error: %v", err), http.StatusInternalServerError)
 		return
@@ -226,14 +274,13 @@ func addJobHandler(w http.ResponseWriter, r *http.Request) {
 	j := Job{ID: int(id), Name: name, Schedule: schedule, Command: command}
 	registerCron(j)
 
-	// return updated table for HTMX or redirect
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Path[len("/run/"):]
 	id, _ := strconv.Atoi(idStr)
-	row := db.QueryRow("SELECT name, command FROM jobs WHERE id=?", id)
+	row := safeQueryRow("SELECT name, command FROM jobs WHERE id=?", id)
 	var j Job
 	row.Scan(&j.Name, &j.Command)
 	go runJob(id, j.Name, j.Command)
@@ -249,8 +296,8 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		delete(cronMap, id)
 	}
 
-	db.Exec("DELETE FROM jobs WHERE id=?", id)
-	db.Exec("DELETE FROM job_runs WHERE job_id=?", id)
+	safeExec("DELETE FROM jobs WHERE id=?", id)
+	safeExec("DELETE FROM job_runs WHERE job_id=?", id)
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -258,11 +305,11 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 func logsHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Path[len("/logs/"):]
 	id, _ := strconv.Atoi(idStr)
-	row := db.QueryRow("SELECT id, name FROM jobs WHERE id=?", id)
+	row := safeQueryRow("SELECT id, name FROM jobs WHERE id=?", id)
 	var j Job
 	row.Scan(&j.ID, &j.Name)
 
-	rows, _ := db.Query("SELECT run_at, status, output FROM job_runs WHERE job_id=? ORDER BY run_at DESC", id)
+	rows, _ := safeQuery("SELECT run_at, status, output FROM job_runs WHERE job_id=? ORDER BY run_at DESC", id)
 	defer rows.Close()
 
 	var logs []Run
