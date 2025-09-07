@@ -2,72 +2,57 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CronCraft Jobs</title>
+  <meta name="viewport" content="width=1024">
+  <title>CronCraft</title>
   <link rel="stylesheet" href="/style.css">
-  <script src="https://unpkg.com/htmx.org@1.9.3"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>CronCraft Jobs</h1>
-<details>
-  <summary>Add New Job</summary>
-    <div class="card">
-      <h2>Add Job</h2>
-      <form hx-post="/add" hx-target="#job-list" hx-swap="innerHTML">
-        <label for="name">Name:</label>
-        <input type="text" id="name" name="name" required>
+  <nav>
+    <ul>
+      <li><strong>CronCraft</strong></li>
+    </ul>
+    <ul>
+      <li><a href="/add">Add Job</a></li>
+    </ul>
+  </nav>
 
-        <label for="schedule">Schedule:</label>
-        <input type="text" id="schedule" name="schedule" required>
-
-        <label for="command">Command:</label>
-        <input type="text" id="command" name="command" required>
-
-        <button type="submit">Add Job</button>
-      </form>
-    </div>
-</details>
-    <div class="card">
-      <h2>Jobs</h2>
-      <div id="job-list">
-        {{template "jobTable" .Jobs}}
-      </div>
-    </div>
-  </div>
-
-  <!-- Job Table Template -->
-  {{define "jobTable"}}
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Name</th>
-        <th>Schedule</th>
-        <th>Command</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{range .}}
-      <tr id="job-{{.ID}}">
-        <td>{{.ID}}</td>
-        <td>{{.Name}}</td>
-        <td>{{.Schedule}}</td>
-        <td>{{.Command}}</td>
-        <td>
-          <button hx-post="/run/{{.ID}}" hx-target="#output-{{.ID}}" hx-swap="innerHTML">Run Now</button>
-
-          <form style="display:inline;" hx-post="/delete/{{.ID}}" hx-target="#job-list" hx-swap="innerHTML">
-            <button onclick="return confirm('Delete this job?');">Delete</button>
-          </form>
-
-          <a href="/logs/{{.ID}}">View Logs</a>
-          <div id="output-{{.ID}}"></div>
-        </td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  {{end}}
+  <main class="container">
+    {{if .Jobs}}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Schedule</th>
+          <th>Command</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Jobs}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{.Schedule}}</td>
+          <td class="command">{{.Command}}</td>
+          <td>
+            <div role="group">
+              <form action="/run/{{.ID}}" method="post">
+                <button type="submit" class="secondary">Run Now</button>
+              </form>
+              <form action="/logs/{{.ID}}" method="get">
+                <button type="submit">View Logs</button>
+              </form>
+              <form action="/delete/{{.ID}}" method="post">
+                <button type="submit" class="contrast" onclick="return confirm('Are you sure?')">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p>No jobs configured yet.</p>
+    {{end}}
+  </main>
 </body>
 </html>

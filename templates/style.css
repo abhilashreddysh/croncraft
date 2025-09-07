@@ -1,132 +1,145 @@
-/* =====================
-   Reset / Base
-   ===================== */
+
+/* Minimal CSS variables */
+:root {
+    --bg-primary: #101010;
+    --bg-secondary: #2d2d2d;
+    --text-primary: #f0f0f0;
+    --text-secondary: #a0a0a0;
+    --accent: #6b8eeb;
+    --accent-hover: #7d9eeb;
+    --border: #444;
+}
+
+/* Basic reset */
 * {
-    margin: 0;
-    padding: 0;
     box-sizing: border-box;
 }
 
 body {
-    font-family: Arial, sans-serif;
-    background-color: #121212;
-    color: #e0e0e0;
-    font-size: 14px;
-    line-height: 1.5;
-    padding: 20px;
-}
-
-/* =====================
-   Headings
-   ===================== */
-h1, h2 {
-    color: #ffffff;
-    margin-bottom: 12px;
-}
-
-/* =====================
-   Tables
-   ===================== */
-table {
-    border-collapse: collapse;
-    width: 100%;
-    background-color: #1e1e1e;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-th, td {
-    padding: 10px 12px;
-    text-align: left;
-}
-
-th {
-    background-color: #333333;
-    color: #ffffff;
-    font-weight: 500;
-}
-
-tr:nth-child(even) {
-    background-color: #2a2a2a;
-}
-
-tr:hover {
-    background-color: #333333;
-}
-
-/* =====================
-   Buttons
-   ===================== */
-button {
-    padding: 6px 12px;
-    margin: 2px;
-    background-color: #555555;
-    color: #ffffff;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: background-color 0.2s;
-}
-
-button:hover {
-    background-color: #777777;
-}
-
-/* =====================
-   Links
-   ===================== */
-a {
-    color: #e0e0e0;
-    text-decoration: none;
-}
-
-a:hover {
-    text-decoration: underline;
-}
-
-/* =====================
-   Form Elements
-   ===================== */
-input, textarea, select {
-    padding: 8px 10px;
-    margin: 4px 0;
-    background-color: #1e1e1e;
-    color: #e0e0e0;
-    border: 1px solid #555555;
-    border-radius: 4px;
-    font-size: 14px;
-    outline: none;
-    width: 100%;
-    transition: border-color 0.2s, background-color 0.2s;
-}
-
-input:focus, textarea:focus, select:focus {
-    border-color: #888888;
-    background-color: #272727;
-}
-
-/* =====================
-   Labels
-   ===================== */
-label {
-    display: block;
-    margin-top: 8px;
-    margin-bottom: 4px;
-    font-weight: 500;
-}
-
-/* =====================
-   Containers / Cards
-   ===================== */
-.container {
-    max-width: 900px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding: 1rem;
+    margin: 0;
+    max-width: 1000px;
     margin: 0 auto;
 }
 
-.card {
-    background-color: #1e1e1e;
-    padding: 16px;
-    margin-bottom: 16px;
-    border-radius: 6px;
+/* Typography enhancements */
+h1, h2, h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+h1 {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+
+/* Navigation */
+nav {
+    background-color: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 2rem;
+    display: flex;
+    justify-content: space-between;
+}
+
+nav ul {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+nav a {
+    color: var(--text-primary);
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    background-color: var(--accent);
+    border-radius: 4px;
+}
+
+nav a:hover {
+    background-color: var(--accent-hover);
+}
+
+/* Forms */
+input, select, textarea {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.5rem;
+    border-radius: 4px;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+button {
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: var(--accent-hover);
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+th, td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+th {
+    background-color: var(--bg-secondary);
+}
+
+/* Code blocks */
+code, pre {
+    background-color: var(--bg-secondary);
+    padding: 0.5rem;
+    border-radius: 4px;
+    overflow: auto;
+}
+
+/* Links */
+a {
+    color: var(--accent);
+}
+
+a:hover {
+    text-decoration: none;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    nav {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    nav ul {
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+    }
+    
+    nav a {
+        display: block;
+        text-align: center;
+    }
 }

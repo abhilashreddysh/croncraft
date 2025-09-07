@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024">
+  <title>Add Job - CronCraft</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>Add New Job</h1>
+
+    <form action="/add" method="post">
+      <label for="name">Job Name
+        <input type="text" id="name" name="name" required>
+      </label>
+
+      <label for="schedule">Cron Schedule
+        <input type="text" id="schedule" name="schedule" placeholder="* * * * *" required>
+        <small>Format: minute hour day month day-of-week</small>
+      </label>
+
+      <label for="command">Command
+        <textarea id="command" name="command" rows="3" required></textarea>
+      </label>
+
+      <div role="group">
+        <button type="submit">Add Job</button>
+        <a href="/" role="button" class="secondary">Cancel</a>
+      </div>
+    </form>
+  </main>
+</body>
+</html>
