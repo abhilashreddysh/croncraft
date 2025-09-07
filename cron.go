@@ -164,4 +164,3 @@ func runJob(jobID int, name, command string) {
         return pruneLogs(jobID)
     })
 }
-

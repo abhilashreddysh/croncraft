@@ -272,7 +272,6 @@ func outputHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Extract runID from /logs/{runID}/output
     parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/logs/"), "/")
     if len(parts) != 2 || parts[1] != "output" {
         http.Error(w, "Invalid path", http.StatusBadRequest)
@@ -285,7 +284,6 @@ func outputHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Set headers for download or inline view
     if r.URL.Query().Get("download") == "1" {
         w.Header().Set("Content-Type", "text/plain; charset=utf-8")
         w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"run_%d.log\"", runID))
@@ -301,40 +299,44 @@ func outputHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    contentWritten := false
+
     if preview != "" {
         _, _ = io.WriteString(w, preview)
+        contentWritten = true
     }
 
     // 2️⃣ Stream remaining disk log, skipping preview
     logFilePath := fmt.Sprintf("/logs/%d.log", runID)
     f, err := os.Open(logFilePath)
-    if err != nil {
-        // Disk file missing — just return what we have
-        return
-    }
-    defer f.Close()
-
-    // Skip preview bytes already sent
-    if _, err := f.Seek(int64(len(preview)), io.SeekStart); err != nil {
-        log.Printf("Failed to seek disk log: %v", err)
-    }
-
-    // Stream the rest
-    buf := make([]byte, 64*1024) // 64 KB buffer
-    for {
-        n, err := f.Read(buf)
-        if n > 0 {
-            _, _ = w.Write(buf[:n])
-            w.(http.Flusher).Flush() // flush to client in real-time
+    if err == nil { // only try to read if file exists
+        defer f.Close()
+        if _, err := f.Seek(int64(len(preview)), io.SeekStart); err != nil {
+            log.Printf("Failed to seek disk log: %v", err)
         }
-        if err != nil {
-            if err == io.EOF {
+
+        buf := make([]byte, 64*1024)
+        for {
+            n, err := f.Read(buf)
+            if n > 0 {
+                _, _ = w.Write(buf[:n])
+                w.(http.Flusher).Flush()
+                contentWritten = true
+            }
+            if err != nil {
+                if err != io.EOF {
+                    log.Printf("Error reading log file: %v", err)
+                }
                 break
             }
-            log.Printf("Error reading log file: %v", err)
-            break
         }
     }
+
+    // 3️⃣ If nothing was written, show placeholder
+    if !contentWritten {
+        _, _ = io.WriteString(w, "⚠️ No log output available for this run.\n")
+    }
+	cleanupEmptyLogs("./logs")
 }
 
 

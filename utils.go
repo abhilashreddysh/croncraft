@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"time"
 )
 
@@ -35,4 +37,26 @@ func retryDBOperation(operation func() error) error {
 func isDBLockedError(err error) bool {
 	return err != nil && (err.Error() == "database is locked" ||
 		err.Error() == "database is locked (5) (SQLITE_BUSY)")
+}
+
+func cleanupEmptyLogs(logDir string) {
+    files, err := os.ReadDir(logDir)
+    if err != nil {
+        log.Printf("Failed to read log dir for cleanup: %v", err)
+        return
+    }
+
+    for _, f := range files {
+        if f.Type().IsRegular() {
+            path := fmt.Sprintf("%s/%s", logDir, f.Name())
+            info, err := f.Info()
+            if err != nil {
+                continue
+            }
+            if info.Size() == 0 {
+                _ = os.Remove(path)
+                log.Printf("Removed empty log file: %s", path)
+            }
+        }
+    }
 }
