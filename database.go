@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -81,7 +82,15 @@ func getJobsFromDB() ([]Job, error) {
 	var jobs []Job
 
 	err := retryDBOperation(func() error {
-		rows, err := db.Query("SELECT id, name, schedule, command FROM jobs")
+		rows, err := db.Query(`
+    SELECT j.id, j.name, j.schedule, j.command,
+           COALESCE((
+               SELECT MAX(r.run_at)
+               FROM job_runs r
+               WHERE r.job_id = j.id
+           ), '') AS last_run
+			FROM jobs j
+		`)
 		if err != nil {
 			return err
 		}
@@ -89,13 +98,21 @@ func getJobsFromDB() ([]Job, error) {
 
 		for rows.Next() {
 			var j Job
-			if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command); err != nil {
+			var lastRun sql.NullString // or sql.NullTime if it's a DATETIME
+			if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &lastRun); err != nil {
 				log.Printf("Failed to scan job row: %v", err)
 				continue
 			}
+
+			if lastRun.Valid {
+				// j.LastRun = lastRun.String // or lastRun.Time if using NullTime
+				t, _ := time.Parse(time.RFC3339, lastRun.String)
+				j.LastRun = timeAgo(t)
+			} else {
+				j.LastRun = "" // no runs yet
+			}
 			jobs = append(jobs, j)
 		}
-
 		return rows.Err()
 	})
 

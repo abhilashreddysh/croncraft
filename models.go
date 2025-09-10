@@ -7,6 +7,7 @@ type Job struct {
 	Name     string
 	Schedule string
 	Command  string
+    LastRun  string
 }
 
 // type Run struct {

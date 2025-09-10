@@ -384,8 +384,10 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var j Job
-	err = db.QueryRow("SELECT id, name, schedule, command FROM jobs WHERE id = ?", id).
-		Scan(&j.ID, &j.Name, &j.Schedule, &j.Command)
+	var lastRun sql.NullString
+	err = db.QueryRow(`SELECT j.id, j.name, j.schedule, j.command, 
+						COALESCE((SELECT MAX(r.run_at) FROM job_runs r WHERE r.job_id = j.id), '') AS last_run 
+						FROM jobs j WHERE id = ?`, id).Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &lastRun)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "Job not found", http.StatusNotFound)
 		return
@@ -393,7 +395,13 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-
+	if lastRun.Valid {
+		// j.LastRun = lastRun.String // or lastRun.Time if using NullTime
+		t, _ := time.Parse(time.RFC3339, lastRun.String)
+		j.LastRun = timeAgo(t)
+	} else {
+		j.LastRun = "" // no runs yet
+	}
 	tmpl := template.Must(template.ParseFS(
 	templatesFS,
 	"templates/base.html",

@@ -108,3 +108,26 @@ func formatDuration(ms int64) string {
     hours := minutes / 60
     return fmt.Sprintf("%.1fh", hours)
 }
+
+// To convert to relative time
+func timeAgo(t time.Time) string {
+	now := time.Now()
+	diff := now.Sub(t)
+
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		return fmt.Sprintf("%d minutes ago", int(diff.Minutes()))
+	case diff < 24*time.Hour:
+		return fmt.Sprintf("%d hours ago", int(diff.Hours()))
+	case diff < 7*24*time.Hour:
+		return fmt.Sprintf("%d days ago", int(diff.Hours()/24))
+	case diff < 30*24*time.Hour:
+		return fmt.Sprintf("%d weeks ago", int(diff.Hours()/(24*7)))
+	case diff < 365*24*time.Hour:
+		return fmt.Sprintf("%d months ago", int(diff.Hours()/(24*30)))
+	default:
+		return fmt.Sprintf("%d years ago", int(diff.Hours()/(24*365)))
+	}
+}

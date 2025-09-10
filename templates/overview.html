@@ -71,7 +71,7 @@ Dashboard{{end}} {{define "subtitle"}}Manage your scheduled jobs{{end}} {{define
                   Active
                 </span>
               </td>
-              <td>2 hours ago</td>
+              <td>{{ .LastRun }}</td>
               <td>
                 <div class="action-buttons">
                   <form action="/run/{{.ID}}" method="post">
