@@ -1,45 +1,387 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Logs - {{.Job.Name}} - CronCraft</title>
-    <link rel="stylesheet" href="/style.css" />
-  </head>
-  <body>
-    <main class="container">
-      <h1>{{.Job.Name}} Logs</h1>
+{{define "title"}}{{.Job.Name}} Logs - CronCraft{{end}} {{define "header"}}Job
+Execution Logs{{end}} {{define "subtitle"}}View past runs and their outputs for
+{{.Job.Name}}{{end}} {{define "content"}}
+<div class="card">
+  <div class="card-header">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h3 class="card-title">{{.Job.Name}} - Execution History</h3>
+        <p class="card-subtitle">View past runs, status, and outputs</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="refreshLogs()">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path
+              d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+            ></path>
+          </svg>
+          Refresh
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="clearFilters()">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon
+              points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
+            ></polygon>
+          </svg>
+          Clear Filters
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    {{if .Logs}}
+    <div class="table-controls">
+      <div class="table-filters">
+        <div class="filter-group">
+          <label for="statusFilter">Status</label>
+          <select
+            id="statusFilter"
+            class="form-control"
+            onchange="filterLogs()"
+          >
+            <option value="all">All Statuses</option>
+            <option value="success">Success</option>
+            <option value="failed">Failed</option>
+            <option value="running">Running</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="dateFilter">Date Range</label>
+          <select id="dateFilter" class="form-control" onchange="filterLogs()">
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-search">
+        <div class="search-input">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="logSearch"
+            placeholder="Search logs..."
+            onkeyup="searchLogs()"
+          />
+        </div>
+      </div>
+    </div>
 
-      <p>
-        <a href="/" style="color: var(--accent)">← Back to Home</a>
+    <div class="table-container">
+      <div class="table-responsive">
+        <table id="logsTable">
+          <thead>
+            <tr>
+              <th>Run Time</th>
+              <th>Duration</th>
+              <th>Status</th>
+              <th>Output Size</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Logs}}
+            <tr class="log-row" data-status="{{.Status}}">
+              <td>
+                <div class="log-time">
+                  <div class="log-date">{{formatDate .RunAt}}</div>
+                  <div class="log-timestamp">{{formatTime .RunAt}}</div>
+                </div>
+              </td>
+              <td>
+                {{if .Duration}}
+                <span class="duration">{{.Duration}}</span>
+                {{else}}
+                <span class="text-muted">-</span>
+                {{end}}
+              </td>
+              <td>
+                <span class="status-badge status-{{.Status}}">
+                  {{if eq .Status "success"}}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  {{else if eq .Status "failed"}}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                  </svg>
+                  {{else}}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="16"></line>
+                    <line x1="8" y1="12" x2="16" y2="12"></line>
+                  </svg>
+                  {{end}} {{.Status}}
+                </span>
+              </td>
+              <td>
+                {{if .OutputSize}}
+                <span class="file-size">{{.OutputSize}}</span>
+                {{else}}
+                <span class="text-muted">No output</span>
+                {{end}}
+              </td>
+              <td>
+                <div class="action-buttons">
+                  <a
+                    href="/logs/{{.ID}}/output"
+                    class="btn btn-primary btn-sm"
+                    title="View Log Output"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    View
+                  </a>
+                  <a
+                    href="/logs/{{.ID}}/output?download=1"
+                    class="btn btn-outline btn-sm"
+                    title="Download Log"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                      ></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="table-pagination">
+      <div class="pagination-info">
+        Showing <span id="visibleCount">{{len .Logs}}</span> of {{len .Logs}}
+        logs
+      </div>
+      <!-- <div class="pagination-controls">
+        <button class="btn btn-outline btn-sm" disabled>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          Previous
+        </button>
+        <span class="pagination-page">Page 1 of 1</span>
+        <button class="btn btn-outline btn-sm" disabled>
+          Next
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div> -->
+    </div>
+    {{else}}
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+      </div>
+      <h3 class="empty-state-title">No execution logs found</h3>
+      <p class="empty-state-text">
+        This job hasn't been executed yet or logs have been cleared.
       </p>
+      <div class="empty-state-actions">
+        <a href="/" class="btn btn-outline">Back to Jobs</a>
+        <button class="btn btn-primary" onclick="runJobNow()">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          Run Job Now
+        </button>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div>
 
-      {{if .Logs}}
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Run At</th>
-            <th>Status</th>
-            <th>Output</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{range .Logs}}
-          <tr>
-            <td>{{.ID}}</td>
-            <td>{{.RunAt}}</td>
-            <td><span class="status {{.Status}}">{{.Status}}</span></td>
-            <td>
-              <a href="/logs/{{.ID}}/output">View Logs</a> |
-              <a href="/logs/{{.ID}}/output?download=1">Download</a>
-            </td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-      {{else}}
-      <p>No logs available for this job.</p>
-      {{end}}
-    </main>
-  </body>
-</html>
+<script>
+  function refreshLogs() {
+    window.location.reload();
+  }
+
+  function clearFilters() {
+    document.getElementById("statusFilter").value = "all";
+    document.getElementById("dateFilter").value = "all";
+    document.getElementById("logSearch").value = "";
+    filterLogs();
+  }
+
+  function filterLogs() {
+    const statusFilter = document.getElementById("statusFilter").value;
+    const dateFilter = document.getElementById("dateFilter").value;
+    const searchTerm = document.getElementById("logSearch").value.toLowerCase();
+
+    const rows = document.querySelectorAll(".log-row");
+    let visibleCount = 0;
+
+    rows.forEach((row) => {
+      const status = row.getAttribute("data-status");
+      const rowText = row.textContent.toLowerCase();
+
+      const statusMatch = statusFilter === "all" || status === statusFilter;
+      const searchMatch = searchTerm === "" || rowText.includes(searchTerm);
+
+      // Date filtering would be more complex in a real application
+      const dateMatch = true; // Simplified for this example
+
+      if (statusMatch && searchMatch && dateMatch) {
+        row.style.display = "";
+        visibleCount++;
+      } else {
+        row.style.display = "none";
+      }
+    });
+
+    document.getElementById("visibleCount").textContent = visibleCount;
+  }
+
+  function searchLogs() {
+    filterLogs();
+  }
+
+  function runJobNow() {
+    // This would trigger the job execution
+    alert("This would trigger the job to run immediately.");
+  }
+</script>
+{{end}}

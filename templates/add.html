@@ -1,41 +1,223 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Add Job - CronCraft</title>
-    <link rel="stylesheet" href="/style.css" />
-  </head>
-  <body>
-    <main>
-      <h1>Add New Job</h1>
-      <p>
-        <a href="/" style="color: var(--accent)">← Back to Home</a>
-      </p>
+{{define "title"}}Add Job - CronCraft{{end}} {{define "header"}}Add New
+Job{{end}} {{define "subtitle"}}Create and schedule a new cron job{{end}}
+{{define "content"}}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Job Details</h3>
+    <p class="card-subtitle">Configure your new scheduled task</p>
+  </div>
+  <div class="card-body">
+    <form action="/add" method="post" class="job-form">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="name" class="form-label">
+            Job Name
+            <span class="required">*</span>
+          </label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            class="form-control"
+            placeholder="e.g., Database Backup"
+            required
+          />
+          <div class="form-text">A descriptive name for your job</div>
+        </div>
 
-      <form action="/add" method="post">
-        <label for="name">Job Name</label>
-        <input type="text" id="name" name="name" required />
+        <div class="form-group">
+          <label for="schedule" class="form-label">
+            Cron Schedule
+            <span class="required">*</span>
+          </label>
+          <div class="input-with-button">
+            <input
+              type="text"
+              id="schedule"
+              name="schedule"
+              class="form-control"
+              placeholder="* * * * *"
+              required
+            />
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              onclick="showScheduleHelper()"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              Help
+            </button>
+          </div>
+          <div class="form-text">Format: minute hour day month day-of-week</div>
+        </div>
+        <div class="schedule-preview" id="schedulePreview">
+          <div class="schedule-preview-header">
+            <span>Schedule Preview</span>
+            <button
+              type="button"
+              class="btn-icon"
+              onclick="hideSchedulePreview()"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="schedule-preview-body">
+            <div class="schedule-item">
+              <span class="schedule-label">Minute</span>
+              <span class="schedule-value" id="previewMinute">-</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-label">Hour</span>
+              <span class="schedule-value" id="previewHour">-</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-label">Day of Month</span>
+              <span class="schedule-value" id="previewDay">-</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-label">Month</span>
+              <span class="schedule-value" id="previewMonth">-</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-label">Day of Week</span>
+              <span class="schedule-value" id="previewWeekday">-</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-label">Next Run</span>
+              <span class="schedule-value" id="previewNextRun">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <label for="schedule">Cron Schedule</label>
-        <input
-          type="text"
-          id="schedule"
-          name="schedule"
-          placeholder="* * * * *"
+      <div class="form-group">
+        <label for="command" class="form-label">
+          Command
+          <span class="required">*</span>
+        </label>
+        <textarea
+          id="command"
+          name="command"
+          class="form-control"
+          rows="4"
+          placeholder="Enter the command to execute"
           required
-        />
-        <small>Format: minute hour day month day-of-week</small>
+        ></textarea>
+        <div class="form-text">
+          The command that will be executed on schedule
+        </div>
+      </div>
 
-        <label for="command">Command</label>
-        <textarea id="command" name="command" rows="3" required></textarea>
+      <div class="form-group">
+        <label class="form-checkbox">
+          <input type="checkbox" id="enabled" name="enabled" checked />
+          <span class="checkmark"></span>
+          Enable this job immediately
+        </label>
+      </div>
 
-        <button
-          type="submit"
-          style="padding: 0.5rem; background: var(--accent)"
-        >
-          Add Job
+      <div class="form-actions">
+        <a href="/" class="btn btn-outline">Cancel</a>
+        <button type="submit" class="btn btn-primary">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+            ></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+          </svg>
+          Create Job
         </button>
-      </form>
-    </main>
-  </body>
-</html>
+      </div>
+    </form>
+  </div>
+</div>
+
+{{template "scheduleHelperModal" .}}
+
+<script>
+  // Show/hide schedule helper modal
+  function showScheduleHelper() {
+    document.getElementById("scheduleHelper").style.display = "block";
+  }
+
+  function hideScheduleHelper() {
+    document.getElementById("scheduleHelper").style.display = "none";
+  }
+
+  // Show/hide schedule preview
+  function hideSchedulePreview() {
+    document.getElementById("schedulePreview").style.display = "none";
+  }
+
+  // Close modal if clicked outside
+  window.onclick = function (event) {
+    const modal = document.getElementById("scheduleHelper");
+    if (event.target === modal) {
+      hideScheduleHelper();
+    }
+  };
+
+  // Basic schedule parsing for preview (simplified)
+  document.getElementById("schedule").addEventListener("input", function (e) {
+    const schedule = e.target.value.trim();
+    const parts = schedule.split(" ");
+
+    if (parts.length === 5) {
+      document.getElementById("schedulePreview").style.display = "block";
+
+      // Update preview values
+      document.getElementById("previewMinute").textContent = parts[0] || "-";
+      document.getElementById("previewHour").textContent = parts[1] || "-";
+      document.getElementById("previewDay").textContent = parts[2] || "-";
+      document.getElementById("previewMonth").textContent = parts[3] || "-";
+      document.getElementById("previewWeekday").textContent = parts[4] || "-";
+
+      // Simple next run calculation (for demo purposes)
+      const now = new Date();
+      const nextRun = new Date(now.getTime() + 30 * 60000); // 30 minutes from now
+      document.getElementById("previewNextRun").textContent =
+        nextRun.toLocaleString();
+    } else if (schedule === "") {
+      document.getElementById("schedulePreview").style.display = "none";
+    }
+  });
+</script>
+{{end}}

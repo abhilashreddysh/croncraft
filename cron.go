@@ -58,6 +58,8 @@ func runJob(jobID int, name, command string) {
     const maxDBOutput = 500 * 1024       // 500 KB preview in DB
     const batchInterval = 2 * time.Second
 
+    startTime := time.Now() // track duration
+
     var runRowID int64
     err := retryDBOperation(func() error {
         res, err := db.Exec(
@@ -77,22 +79,21 @@ func runJob(jobID int, name, command string) {
 
     log.Printf("[%s] Running job: %s", runAt, name)
 
+    // Create log directory & file
+    logDir := "./logs"
+    if err := os.MkdirAll(logDir, 0755); err != nil {
+        log.Printf("[%s] Failed to create log directory for job %s: %v", runAt, name, err)
+        return
+    }
+    logFilePath := fmt.Sprintf("%s/%d.log", logDir, runRowID)
+    f, err := os.Create(logFilePath)
+    if err != nil {
+        log.Printf("[%s] Failed to create log file for job %s: %v", runAt, name, err)
+        return
+    }
+    defer f.Close()
 
-	logDir := "./logs"
-
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		log.Printf("[%s] Failed to create log directory for job %s: %v", runAt, name, err)
-		return
-	}
-
-	logFilePath := fmt.Sprintf("%s/%d.log", logDir, runRowID)
-	f, err := os.Create(logFilePath)
-	if err != nil {
-		log.Printf("[%s] Failed to create log file for job %s: %v", runAt, name, err)
-		return
-	}
-	defer f.Close()
-
+    // Start command
     cmd := exec.Command("sh", "-c", command)
     stdoutPipe, _ := cmd.StdoutPipe()
     stderrPipe, _ := cmd.StderrPipe()
@@ -103,9 +104,10 @@ func runJob(jobID int, name, command string) {
         return
     }
 
+    // Capture output for DB and file
     scanner := bufio.NewScanner(reader)
     buf := make([]byte, 0, 1024*1024)
-    scanner.Buffer(buf, 10*1024*1024) // handle long lines
+    scanner.Buffer(buf, 10*1024*1024)
 
     var outputDB string
     truncated := false
@@ -113,11 +115,9 @@ func runJob(jobID int, name, command string) {
 
     for scanner.Scan() {
         line := scanner.Text() + "\n"
+        f.WriteString(line) // always write to file
 
-        // Always write to disk
-        f.WriteString(line)
-
-        // Keep preview in DB up to maxDBOutput
+        // Keep preview for DB
         if len(outputDB) < maxDBOutput {
             remaining := maxDBOutput - len(outputDB)
             if len(line) > remaining {
@@ -130,7 +130,7 @@ func runJob(jobID int, name, command string) {
             truncated = true
         }
 
-        // Batch update DB every 2 seconds
+        // Batch DB update every batchInterval
         if time.Since(lastUpdate) > batchInterval {
             tempOutput := outputDB
             if truncated {
@@ -151,15 +151,21 @@ func runJob(jobID int, name, command string) {
         log.Printf("[%s] Job %s failed: %v", runAt, name, err)
     }
 
+    // Final duration and output update
+    duration := time.Since(startTime)
     finalOutput := outputDB
     if truncated {
         finalOutput += "... (truncated)\n"
     }
     _ = retryDBOperation(func() error {
-        _, err := db.Exec("UPDATE job_runs SET status = ?, output = ? WHERE id = ?", status, finalOutput, runRowID)
+        _, err := db.Exec(
+            "UPDATE job_runs SET status = ?, duration_ms = ?, output = ? WHERE id = ?",
+            status, duration.Milliseconds(), finalOutput, runRowID,
+        )
         return err
     })
 
+    // Optional: prune old logs
     _ = retryDBOperation(func() error {
         return pruneLogs(jobID)
     })

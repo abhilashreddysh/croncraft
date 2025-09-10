@@ -111,3 +111,10 @@ The web interface is available at `http://localhost:8080/`.
 # License
 
 This project is licensed under **GPLv3**.
+
+---
+
+# To-Do
+
+- [ ] Run job immediately
+- [ ] Option to enable and disable the job

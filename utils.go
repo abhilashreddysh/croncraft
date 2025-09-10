@@ -60,3 +60,51 @@ func cleanupEmptyLogs(logDir string) {
         }
     }
 }
+
+
+// Helper function to format date for display
+func formatDate(t time.Time) string {
+    return t.Format("Jan 2, 2006")
+}
+
+// Helper function to format time for display
+func formatTime(t time.Time) string {
+    return t.Format("3:04 PM")
+}
+
+// Helper function to format file size in bytes to human-readable format
+func formatFileSize(bytes int64) string {
+    const unit = 1024
+    if bytes < unit {
+        return fmt.Sprintf("%d B", bytes)
+    }
+    
+    div, exp := int64(unit), 0
+    for n := bytes / unit; n >= unit; n /= unit {
+        div *= unit
+        exp++
+    }
+    
+    units := []string{"KB", "MB", "GB", "TB"}
+    return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
+}
+
+// Helper function to format duration in milliseconds to human-readable format
+func formatDuration(ms int64) string {
+    if ms < 1000 {
+        return fmt.Sprintf("%dms", ms)
+    }
+    
+    seconds := float64(ms) / 1000
+    if seconds < 60 {
+        return fmt.Sprintf("%.1fs", seconds)
+    }
+    
+    minutes := seconds / 60
+    if minutes < 60 {
+        return fmt.Sprintf("%.1fm", minutes)
+    }
+    
+    hours := minutes / 60
+    return fmt.Sprintf("%.1fh", hours)
+}

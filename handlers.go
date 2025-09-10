@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/robfig/cron/v3"
 )
@@ -20,8 +21,8 @@ import (
 var templatesFS embed.FS
 
 func setupHTTPHandlers() {
-	// Static files
-	http.HandleFunc("/style.css", serveStaticFile("text/css", "templates/style.css"))
+	// Static files	
+	http.HandleFunc("/style.css", serveStaticFile("text/css", "templates/static/style.css"))
 
 	// Application routes
 	http.HandleFunc("/", indexHandler)
@@ -73,19 +74,37 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl := template.Must(template.ParseFS(templatesFS, "templates/index.html"))
-	if err := tmpl.Execute(w, map[string]interface{}{"Jobs": jobs}); err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
+	// Parse base and index together
+	tmpl, err := template.ParseFS(templatesFS,
+		"templates/base.html",
+		"templates/overview.html",
+        "templates/modals/delete_confirm.html",
+	)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Template parse error: %v", err), http.StatusInternalServerError)
+		return
 	}
+
+	// Execute base template (which includes index.html)
+	if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{"Jobs": jobs}); err != nil {
+		http.Error(w, fmt.Sprintf("Template execute error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
 }
 
 func addJobHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		// Serve the add job form
-		tmpl := template.Must(template.ParseFS(templatesFS, "templates/add.html"))
-		if err := tmpl.Execute(w, nil); err != nil {
-			http.Error(w, "Template error", http.StatusInternalServerError)
+		tmpl := template.Must(template.ParseFS(
+			templatesFS,
+			"templates/base.html",
+			"templates/add.html",    
+            "templates/modals/schedule_helper.html",
+		))
+		if err := tmpl.ExecuteTemplate(w, "base", nil); err != nil {
+			http.Error(w, fmt.Sprintf("Template error: %v", err), http.StatusInternalServerError)
 		}
 
 	case http.MethodPost:
@@ -206,65 +225,75 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func logsHandler(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodGet {
-        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-        return
-    }
+// func logsHandler(w http.ResponseWriter, r *http.Request) {
+//     if r.Method != http.MethodGet {
+//         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+//         return
+//     }
 
-    // Parse job ID from /logs/{jobID}
-    id, err := strconv.Atoi(r.URL.Path[len("/logs/"):])
-    if err != nil {
-        http.Error(w, "Invalid job ID", http.StatusBadRequest)
-        return
-    }
+//     // Parse job ID from /logs/{jobID}
+//     id, err := strconv.Atoi(r.URL.Path[len("/logs/"):])
+//     if err != nil {
+//         http.Error(w, "Invalid job ID", http.StatusBadRequest)
+//         return
+//     }
 
-    // Fetch job info
-    var j Job
-    err = db.QueryRow("SELECT id, name FROM jobs WHERE id = ?", id).
-        Scan(&j.ID, &j.Name)
-    if errors.Is(err, sql.ErrNoRows) {
-        http.Error(w, "Job not found", http.StatusNotFound)
-        return
-    } else if err != nil {
-        http.Error(w, "Database error", http.StatusInternalServerError)
-        return
-    }
+//     // Fetch job info
+//     var j Job
+//     err = db.QueryRow("SELECT id, name FROM jobs WHERE id = ?", id).
+//         Scan(&j.ID, &j.Name)
+//     if errors.Is(err, sql.ErrNoRows) {
+//         http.Error(w, "Job not found", http.StatusNotFound)
+//         return
+//     } else if err != nil {
+//         http.Error(w, "Database error", http.StatusInternalServerError)
+//         return
+//     }
 
-    // Fetch runs for this job (NO output here, just ID + metadata)
-    rows, err := db.Query(
-        "SELECT id, run_at, status FROM job_runs WHERE job_id = ? ORDER BY run_at DESC",
-        id,
-    )
-    if err != nil {
-        http.Error(w, "Database error", http.StatusInternalServerError)
-        return
-    }
-    defer rows.Close()
+//     // Fetch runs for this job (NO output here, just ID + metadata)
+//     rows, err := db.Query(
+//         "SELECT id, run_at, status FROM job_runs WHERE job_id = ? ORDER BY run_at DESC",
+//         id,
+//     )
+//     if err != nil {
+//         http.Error(w, "Database error", http.StatusInternalServerError)
+//         return
+//     }
+//     defer rows.Close()
 
-    var logs []Run
-    for rows.Next() {
-        var logEntry Run
-        if err := rows.Scan(&logEntry.ID, &logEntry.RunAt, &logEntry.Status); err != nil {
-            log.Printf("Failed to scan log row: %v", err)
-            continue
-        }
-        logs = append(logs, logEntry)
-    }
-    if err := rows.Err(); err != nil {
-        http.Error(w, "Database error", http.StatusInternalServerError)
-        return
-    }
+//     var logs []Run
+//     for rows.Next() {
+//         var logEntry Run
+//         if err := rows.Scan(&logEntry.ID, &logEntry.RunAt, &logEntry.Status); err != nil {
+//             log.Printf("Failed to scan log row: %v", err)
+//             continue
+//         }
+//         logs = append(logs, logEntry)
+//     }
+//     if err := rows.Err(); err != nil {
+//         http.Error(w, "Database error", http.StatusInternalServerError)
+//         return
+//     }
 
-    // Render template
-    tmpl := template.Must(template.ParseFS(templatesFS, "templates/logs.html"))
-    if err := tmpl.Execute(w, map[string]interface{}{
-        "Job":  j,
-        "Logs": logs,
-    }); err != nil {
-        log.Printf("Template execution error: %v", err)
-    }
-}
+//     // Render template
+// 	tmpl, err := template.ParseFS(templatesFS,
+// 		"templates/base.html",
+// 		"templates/logs.html",
+// 	)
+// 	if err != nil {
+// 		http.Error(w, fmt.Sprintf("Template parse error: %v", err), http.StatusInternalServerError)
+// 		return
+// 	}
+
+// 	if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{
+// 		"Job":  j,
+// 		"Logs": logs,
+// 	}); err != nil {
+// 		log.Printf("Template execution error: %v", err)
+// 		http.Error(w, "Template execution failed", http.StatusInternalServerError)
+// 	}
+
+// }
 
 func outputHandler(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodGet {
@@ -365,9 +394,15 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpl := template.Must(template.ParseFS(templatesFS, "templates/edit.html"))
-	if err := tmpl.Execute(w, map[string]interface{}{"Job": j}); err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
+	tmpl := template.Must(template.ParseFS(
+	templatesFS,
+	"templates/base.html",
+	"templates/edit.html",
+    "templates/modals/schedule_helper.html",
+    "templates/modals/delete_confirm.html",
+	))
+	if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{"Job": j}); err != nil {
+		http.Error(w, fmt.Sprintf("Template error: %v", err), http.StatusInternalServerError)
 	}
 }
 // POST /edit/{id}
@@ -415,4 +450,119 @@ func editJobSubmitHandler(w http.ResponseWriter, r *http.Request) {
     cronMap[id] = newEntryID
 
     http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// TEsting
+func createTemplate() *template.Template {
+    return template.New("").Funcs(template.FuncMap{
+        "formatDate": formatDate,
+        "formatTime": formatTime,
+    })
+}
+
+func logsHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodGet {
+        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+        return
+    }
+
+    // Parse job ID from /logs/{jobID}
+    id, err := strconv.Atoi(r.URL.Path[len("/logs/"):])
+    if err != nil {
+        http.Error(w, "Invalid job ID", http.StatusBadRequest)
+        return
+    }
+
+    // Fetch job info
+    var j Job
+    err = db.QueryRow("SELECT id, name FROM jobs WHERE id = ?", id).
+        Scan(&j.ID, &j.Name)
+    if errors.Is(err, sql.ErrNoRows) {
+        http.Error(w, "Job not found", http.StatusNotFound)
+        return
+    } else if err != nil {
+        http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+        return
+    }
+
+    // Fetch runs for this job with additional metadata
+    rows, err := db.Query(`
+        SELECT 
+            id, 
+            run_at, 
+            status, 
+            duration_ms,
+            LENGTH(output) as output_size
+        FROM job_runs 
+        WHERE job_id = ? 
+        ORDER BY run_at DESC
+    `, id)
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
+
+    var logs []Run
+    for rows.Next() {
+        var logEntry Run
+        var runAtStr string
+        var durationMs sql.NullInt64
+        var outputSize sql.NullInt64
+        
+        if err := rows.Scan(
+            &logEntry.ID,
+            &runAtStr,
+            &logEntry.Status, 
+            &durationMs,
+            &outputSize,
+        ); err != nil {
+            log.Printf("Failed to scan log row: %v", err)
+            continue
+        }
+
+        t, err := time.Parse(time.RFC3339, runAtStr)
+        if err != nil {
+            log.Printf("Failed to parse run_at: %v", err)
+            continue
+        }
+        logEntry.RunAt = t
+
+        
+        // Convert duration to human-readable format
+        if durationMs.Valid {
+            logEntry.Duration = formatDuration(durationMs.Int64)
+        }
+        
+        // Convert output size to human-readable format
+        if outputSize.Valid {
+            logEntry.OutputSize = formatFileSize(outputSize.Int64)
+        }
+        
+        logs = append(logs, logEntry)
+    }
+    if err := rows.Err(); err != nil {
+        http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
+        return
+    }
+
+    // Render template
+	tmpl := createTemplate()
+	tmpl, err = tmpl.ParseFS(templatesFS,
+		"templates/base.html",
+		"templates/logs.html",
+	)
+
+    if err != nil {
+        http.Error(w, fmt.Sprintf("Template parse error: %v", err), http.StatusInternalServerError)
+        return
+    }
+
+    if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{
+        "Job":  j,
+        "Logs": logs,
+    }); err != nil {
+        log.Printf("Template execution error: %v", err)
+        http.Error(w, "Template execution failed", http.StatusInternalServerError)
+    }
 }

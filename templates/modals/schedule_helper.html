@@ -1,0 +1,85 @@
+{{define "scheduleHelperModal"}}
+<div class="modal" id="scheduleHelper">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Cron Schedule Helper</h3>
+      <button type="button" class="btn-icon" onclick="hideScheduleHelper()">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p>Cron expressions have five time fields separated by spaces:</p>
+      <div class="schedule-table">
+        <div class="schedule-row">
+          <div class="schedule-field">Minute</div>
+          <div class="schedule-acceptable">0-59</div>
+          <div class="schedule-example">*/5 - every 5 minutes</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-field">Hour</div>
+          <div class="schedule-acceptable">0-23</div>
+          <div class="schedule-example">0 - midnight</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-field">Day of Month</div>
+          <div class="schedule-acceptable">1-31</div>
+          <div class="schedule-example">1 - first day of month</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-field">Month</div>
+          <div class="schedule-acceptable">1-12 or JAN-DEC</div>
+          <div class="schedule-example">*/3 - every 3 months</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-field">Day of Week</div>
+          <div class="schedule-acceptable">0-6 or SUN-SAT</div>
+          <div class="schedule-example">1-5 - weekdays only</div>
+        </div>
+      </div>
+
+      <div class="common-examples">
+        <h4>Common Examples:</h4>
+        <ul>
+          <li><code>0 * * * *</code> - Every hour at minute 0</li>
+          <li><code>0 0 * * *</code> - Daily at midnight</li>
+          <li><code>0 9 * * 1</code> - Every Monday at 9:00 AM</li>
+          <li><code>0 0 1 * *</code> - First day of every month</li>
+          <li><code>*/15 * * * *</code> - Every 15 minutes</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button
+        type="button"
+        class="btn btn-primary"
+        onclick="hideScheduleHelper()"
+      >
+        Got it
+      </button>
+    </div>
+  </div>
+</div>
+<script>
+  // Show/hide schedule helper modal
+  function showScheduleHelper() {
+    document.getElementById("scheduleHelper").style.display = "block";
+  }
+
+  function hideScheduleHelper() {
+    document.getElementById("scheduleHelper").style.display = "none";
+  }
+</script>
+{{end}}

@@ -61,6 +61,7 @@ func initializeDatabase() error {
 			run_at TEXT NOT NULL,
 			status TEXT NOT NULL,
 			output TEXT,
+			duration_ms INT,
 			FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE
 		)`,
 		"CREATE INDEX IF NOT EXISTS idx_job_runs_job_id ON job_runs(job_id)",
