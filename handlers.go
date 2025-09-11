@@ -25,7 +25,7 @@ func setupHTTPHandlers() {
 	http.HandleFunc("/style.css", serveStaticFile("text/css", "templates/static/style.css"))
 
 	// Application routes
-	http.HandleFunc("/", indexHandler)
+	http.HandleFunc("/", overviewHandler)
 	http.HandleFunc("/add", addJobHandler)
 	http.HandleFunc("/run/", runHandler)
 	http.HandleFunc("/delete/", deleteHandler)
@@ -62,7 +62,7 @@ func serveStaticFile(contentType, filePath string) http.HandlerFunc {
 	}
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
+func overviewHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -86,7 +86,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute base template (which includes index.html)
-	if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{"Jobs": jobs}); err != nil {
+	if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{"Jobs": jobs,"ActivePage": "overview"}); err != nil {
 		http.Error(w, fmt.Sprintf("Template execute error: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -103,7 +103,7 @@ func addJobHandler(w http.ResponseWriter, r *http.Request) {
 			"templates/add.html",    
             "templates/modals/schedule_helper.html",
 		))
-		if err := tmpl.ExecuteTemplate(w, "base", nil); err != nil {
+		if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{"ActivePage": "add"}); err != nil {
 			http.Error(w, fmt.Sprintf("Template error: %v", err), http.StatusInternalServerError)
 		}
 

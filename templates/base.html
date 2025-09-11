@@ -35,7 +35,10 @@
         <nav class="sidebar-nav">
           <ul>
             <li>
-              <a href="/" class="nav-item active">
+              <a
+                href="/"
+                class="nav-item {{if eq .ActivePage `overview`}}active{{end}}"
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="20"
@@ -52,11 +55,14 @@
                   ></path>
                   <polyline points="9 22 9 12 15 12 15 22"></polyline>
                 </svg>
-                <span>Dashboard</span>
+                <span>Overview</span>
               </a>
             </li>
             <li>
-              <a href="/add" class="nav-item">
+              <a
+                href="/add"
+                class="nav-item {{if eq .ActivePage `add`}}active{{end}}"
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="20"
@@ -154,11 +160,11 @@
                 <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
               </svg>
             </button>
-            <div class="user-menu">
+            <!-- <div class="user-menu">
               <button class="user-avatar">
                 <span>JD</span>
               </button>
-            </div>
+            </div> -->
           </div>
         </header>
 

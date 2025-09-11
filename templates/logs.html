@@ -58,7 +58,7 @@ Execution Logs{{end}} {{define "subtitle"}}View past runs and their outputs for
           <label for="statusFilter">Status</label>
           <select
             id="statusFilter"
-            class="form-control"
+            class="form-control filter"
             onchange="filterLogs()"
           >
             <option value="all">All Statuses</option>
@@ -69,7 +69,11 @@ Execution Logs{{end}} {{define "subtitle"}}View past runs and their outputs for
         </div>
         <div class="filter-group">
           <label for="dateFilter">Date Range</label>
-          <select id="dateFilter" class="form-control" onchange="filterLogs()">
+          <select
+            id="dateFilter"
+            class="form-control filter"
+            onchange="filterLogs()"
+          >
             <option value="all">All Time</option>
             <option value="today">Today</option>
             <option value="week">This Week</option>
