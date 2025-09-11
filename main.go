@@ -50,10 +50,14 @@ func setupSignalHandling() {
 
 func shutdown() {
 	if db != nil {
+		// Flush all pending WAL changes into the main DB
 		if _, err := db.Exec("PRAGMA wal_checkpoint(FULL);"); err != nil {
 			log.Printf("Failed to checkpoint WAL: %v", err)
 		}
-		db.Close()
+
+		if err := db.Close(); err != nil {
+			log.Printf("Failed to close DB: %v", err)
+		}
 	}
 
 	if c != nil {

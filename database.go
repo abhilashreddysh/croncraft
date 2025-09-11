@@ -54,8 +54,19 @@ func initializeDatabase() error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			schedule TEXT NOT NULL,
-			command TEXT NOT NULL
+			command TEXT NOT NULL,
+			status TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TRIGGER IF NOT EXISTS trg_jobs_updated_at
+		AFTER UPDATE ON jobs
+		FOR EACH ROW
+		BEGIN
+			UPDATE jobs
+			SET updated_at = CURRENT_TIMESTAMP
+			WHERE id = OLD.id;
+		END;`,
 		`CREATE TABLE IF NOT EXISTS job_runs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			job_id INTEGER NOT NULL,
@@ -83,7 +94,7 @@ func getJobsFromDB() ([]Job, error) {
 
 	err := retryDBOperation(func() error {
 		rows, err := db.Query(`
-    SELECT j.id, j.name, j.schedule, j.command,
+    SELECT j.id, j.name, j.schedule, j.command, j.status,
            COALESCE((
                SELECT MAX(r.run_at)
                FROM job_runs r
@@ -99,7 +110,7 @@ func getJobsFromDB() ([]Job, error) {
 		for rows.Next() {
 			var j Job
 			var lastRun sql.NullString // or sql.NullTime if it's a DATETIME
-			if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &lastRun); err != nil {
+			if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &j.Status, &lastRun); err != nil {
 				log.Printf("Failed to scan job row: %v", err)
 				continue
 			}

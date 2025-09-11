@@ -37,7 +37,7 @@ Dashboard{{end}} {{define "subtitle"}}Manage your scheduled jobs{{end}} {{define
               <th>Name</th>
               <th>Schedule</th>
               <th>Command</th>
-              <th>Status</th>
+              <th>Active</th>
               <th>Last Run</th>
               <th>Actions</th>
             </tr>
@@ -47,13 +47,16 @@ Dashboard{{end}} {{define "subtitle"}}Manage your scheduled jobs{{end}} {{define
             <tr>
               <td>{{.Name}}</td>
               <td>
-                <span class="status-badge status-active">{{.Schedule}}</span>
+                <code>{{.Schedule}}</code>
               </td>
               <td>
                 <code>{{.Command}}</code>
               </td>
               <td>
-                <span class="status-badge status-active">
+                <span
+                  class="status-badge status-{{if .Status}}active{{else}}error{{end}}"
+                >
+                  {{if .Status}}
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="12"
@@ -68,7 +71,23 @@ Dashboard{{end}} {{define "subtitle"}}Manage your scheduled jobs{{end}} {{define
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                     <polyline points="22 4 12 14.01 9 11.01"></polyline>
                   </svg>
-                  Active
+                  Enabled {{else}}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    class="bi bi-x-circle"
+                    viewBox="0 0 16 16"
+                  >
+                    <path
+                      d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"
+                    />
+                    <path
+                      d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"
+                    />
+                  </svg>
+                  Disabled {{end}}
                 </span>
               </td>
               <td>{{ .LastRun }}</td>

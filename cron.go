@@ -39,6 +39,12 @@ func loadJobs() {
 }
 
 func registerCron(j Job) {
+    
+    if !j.Status {
+		log.Printf("Skipping job %s (disabled)", j.Name)
+		return
+	}
+
 	id, err := c.AddFunc(j.Schedule, func() {
 		runJob(j.ID, j.Name, j.Command)
 	})

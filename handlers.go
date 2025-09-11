@@ -117,6 +117,7 @@ func addJobHandler(w http.ResponseWriter, r *http.Request) {
 		name := r.FormValue("name")
 		schedule := r.FormValue("schedule")
 		command := r.FormValue("command")
+		status := r.FormValue("enabled") == "on"
 
 		if name == "" || schedule == "" || command == "" {
 			http.Error(w, "All fields are required", http.StatusBadRequest)
@@ -130,8 +131,8 @@ func addJobHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		res, err := db.Exec(
-			"INSERT INTO jobs(name, schedule, command) VALUES(?, ?, ?)",
-			name, schedule, command,
+			"INSERT INTO jobs(name, schedule, command, status) VALUES(?, ?, ?, ?)",
+			name, schedule, command, status,
 		)
 
 		if err != nil {
@@ -385,9 +386,9 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 
 	var j Job
 	var lastRun sql.NullString
-	err = db.QueryRow(`SELECT j.id, j.name, j.schedule, j.command, 
+	err = db.QueryRow(`SELECT j.id, j.name, j.schedule, j.command, j.status, j.created_at, j.updated_at,
 						COALESCE((SELECT MAX(r.run_at) FROM job_runs r WHERE r.job_id = j.id), '') AS last_run 
-						FROM jobs j WHERE id = ?`, id).Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &lastRun)
+						FROM jobs j WHERE id = ?`, id).Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &j.Status, &j.CreatedAt, &j.UpdatedAt, &lastRun)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "Job not found", http.StatusNotFound)
 		return
@@ -432,16 +433,27 @@ func editJobSubmitHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    name := r.FormValue("name")
-    schedule := r.FormValue("schedule")
-    command := r.FormValue("command")
+	name := r.FormValue("name")
+	schedule := r.FormValue("schedule")
+	command := r.FormValue("command")
+	status := r.FormValue("enabled") == "on" // true/false
 
-    _, err = db.Exec("UPDATE jobs SET name = ?, schedule = ?, command = ? WHERE id = ?",
-        name, schedule, command, id)
-    if err != nil {
-        http.Error(w, "Database update failed", http.StatusInternalServerError)
-        return
-    }
+	statusInt := 0
+	if status {
+		statusInt = 1
+	}
+
+	_, err = db.Exec(`
+		UPDATE jobs 
+		SET name = ?, schedule = ?, command = ?, status = ? 
+		WHERE id = ?`,
+		name, schedule, command, statusInt, id,
+	)
+	if err != nil {
+		http.Error(w, "Database update failed", http.StatusInternalServerError)
+		return
+	}
+
     if entryID, ok := cronMap[id]; ok {
         c.Remove(entryID)
     }

@@ -8,7 +8,39 @@
         <h3 class="card-title">Edit Job: {{.Job.Name}}</h3>
       </div>
       <div class="status-indicator">
-        <span class="status-badge status-active">Active</span>
+        <span
+          class="status-badge status-{{if .Job.Status}}active{{else}}error{{end}}"
+        >
+          {{if .Job.Status}}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          Active {{else}}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="currentColor"
+            class="bi bi-ban"
+            viewBox="0 0 16 16"
+          >
+            <path
+              d="M15 8a6.97 6.97 0 0 0-1.71-4.584l-9.874 9.875A7 7 0 0 0 15 8M2.71 12.584l9.874-9.875a7 7 0 0 0-9.874 9.874ZM16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0"
+            />
+          </svg>
+          Inactive {{end}}
+        </span>
       </div>
     </div>
   </div>
@@ -147,7 +179,13 @@
 
       <div class="form-group">
         <label class="form-checkbox">
-          <input type="checkbox" id="enabled" name="enabled" checked />
+          <input
+            type="checkbox"
+            id="enabled"
+            name="enabled"
+            {{if
+            .Job.Status}}checked{{end}}
+          />
           <span class="checkmark"></span>
           Enable this job
         </label>
@@ -163,6 +201,14 @@
           <div class="meta-item">
             <span class="meta-label">Last Run</span>
             <span class="meta-value">{{ .Job.LastRun }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Created</span>
+            <span class="meta-value">{{ .Job.CreatedAt }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Last Modified</span>
+            <span class="meta-value">{{ .Job.UpdatedAt }}</span>
           </div>
         </div>
       </div>

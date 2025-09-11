@@ -371,6 +371,7 @@ tr:hover {
   border-radius: 50px;
   font-size: 0.75rem;
   font-weight: 500;
+  text-transform: capitalize;
 }
 
 .status-active {
@@ -380,7 +381,7 @@ tr:hover {
 
 .status-inactive {
   background-color: rgba(100, 116, 139, 0.1);
-  color: var(--text-secondary);
+  color: var(--accent-secondary);
 }
 
 .status-error {

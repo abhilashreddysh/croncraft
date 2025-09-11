@@ -7,20 +7,16 @@ type Job struct {
 	Name     string
 	Schedule string
 	Command  string
+	Status  bool
     LastRun  string
+    CreatedAt string
+    UpdatedAt string
 }
-
-// type Run struct {
-// 	ID     int
-// 	RunAt  string
-// 	Status string
-// 	Output string
-// }
 
 type Run struct {
     ID         int
     RunAt      time.Time
     Status     string
-    Duration   string // Formatted duration string
-    OutputSize string // Formatted file size string
+    Duration   string
+    OutputSize string
 }
