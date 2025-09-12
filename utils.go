@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -109,25 +110,53 @@ func formatDuration(ms int64) string {
     return fmt.Sprintf("%.1fh", hours)
 }
 
-// To convert to relative time
 func timeAgo(t time.Time) string {
 	now := time.Now()
+	if t.After(now) {
+		return "in the future"
+	}
+
 	diff := now.Sub(t)
+	seconds := int(diff.Seconds())
 
 	switch {
-	case diff < time.Minute:
-		return "just now"
-	case diff < time.Hour:
-		return fmt.Sprintf("%d minutes ago", int(diff.Minutes()))
-	case diff < 24*time.Hour:
-		return fmt.Sprintf("%d hours ago", int(diff.Hours()))
-	case diff < 7*24*time.Hour:
-		return fmt.Sprintf("%d days ago", int(diff.Hours()/24))
-	case diff < 30*24*time.Hour:
-		return fmt.Sprintf("%d weeks ago", int(diff.Hours()/(24*7)))
-	case diff < 365*24*time.Hour:
-		return fmt.Sprintf("%d months ago", int(diff.Hours()/(24*30)))
+	case seconds < 60:
+		return fmt.Sprintf("%d seconds ago", seconds)
+	case seconds < 3600:
+		mins := seconds / 60
+		return fmt.Sprintf("%d minutes ago", mins)
+	case seconds < 86400:
+		hours := seconds / 3600
+		return fmt.Sprintf("%d hours ago", hours)
+	case seconds < 2592000: // ~30 days
+		days := seconds / 86400
+		return fmt.Sprintf("%d days ago", days)
+	case seconds < 31536000: // < 12 months
+		months := seconds / 2592000
+		days := (seconds % 2592000) / 86400
+		if days > 0 {
+			return fmt.Sprintf("%d months %d days ago", months, days)
+		}
+		return fmt.Sprintf("%d months ago", months)
 	default:
-		return fmt.Sprintf("%d years ago", int(diff.Hours()/(24*365)))
+		years := seconds / 31536000
+		months := (seconds % 31536000) / 2592000
+		if months > 0 {
+			return fmt.Sprintf("%d years %d months ago", years, months)
+		}
+		return fmt.Sprintf("%d years ago", years)
 	}
+}
+
+func nullTimeAgo(ns sql.NullString) string {
+	if !ns.Valid {
+		return ""
+	}
+
+	t, err := time.Parse(time.RFC3339, ns.String)
+	if err != nil {
+		return ""
+	}
+
+	return timeAgo(t)
 }

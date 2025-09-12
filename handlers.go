@@ -385,10 +385,10 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var j Job
-	var lastRun sql.NullString
+	var lastRun,Created,Updated sql.NullString
 	err = db.QueryRow(`SELECT j.id, j.name, j.schedule, j.command, j.status, j.created_at, j.updated_at,
 						COALESCE((SELECT MAX(r.run_at) FROM job_runs r WHERE r.job_id = j.id), '') AS last_run 
-						FROM jobs j WHERE id = ?`, id).Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &j.Status, &j.CreatedAt, &j.UpdatedAt, &lastRun)
+						FROM jobs j WHERE id = ?`, id).Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &j.Status, &Created, &Updated, &lastRun)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "Job not found", http.StatusNotFound)
 		return
@@ -396,13 +396,11 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-	if lastRun.Valid {
-		// j.LastRun = lastRun.String // or lastRun.Time if using NullTime
-		t, _ := time.Parse(time.RFC3339, lastRun.String)
-		j.LastRun = timeAgo(t)
-	} else {
-		j.LastRun = "" // no runs yet
-	}
+
+	j.CreatedAt = nullTimeAgo(Created)
+	j.UpdatedAt = nullTimeAgo(Updated)
+	j.LastRun   = nullTimeAgo(lastRun)
+
 	tmpl := template.Must(template.ParseFS(
 	templatesFS,
 	"templates/base.html",

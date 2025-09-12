@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -114,14 +113,7 @@ func getJobsFromDB() ([]Job, error) {
 				log.Printf("Failed to scan job row: %v", err)
 				continue
 			}
-
-			if lastRun.Valid {
-				// j.LastRun = lastRun.String // or lastRun.Time if using NullTime
-				t, _ := time.Parse(time.RFC3339, lastRun.String)
-				j.LastRun = timeAgo(t)
-			} else {
-				j.LastRun = "" // no runs yet
-			}
+			j.LastRun = nullTimeAgo(lastRun)
 			jobs = append(jobs, j)
 		}
 		return rows.Err()
