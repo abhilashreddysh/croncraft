@@ -6,26 +6,30 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/abhilashreddysh/croncraft/internal/db"
+	"github.com/abhilashreddysh/croncraft/internal/handlers"
+	"github.com/abhilashreddysh/croncraft/internal/jobs"
 )
 
 const (
-	dbFile        = "croncraft.db"
-	MaxLogsPerJob = 10
+	DBFile        = "croncraft.db"
+	
 	serverPort    = ":8080"
 )
 
 func main() {
-	if err := initializeDatabase(); err != nil {
+	if err := db.InitializeDatabase(DBFile); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	initializeCron()
-	defer c.Stop()
+	jobs.InitializeCron()
+	defer jobs.C.Stop()
 
 	// Load existing jobs
-	loadJobs()
+	jobs.LoadJobs()
 
-	setupHTTPHandlers()
+	handlers.SetupHTTPHandlers()
 
 	// Graceful shutdown handling
 	setupSignalHandling()
@@ -49,18 +53,18 @@ func setupSignalHandling() {
 }
 
 func shutdown() {
-	if db != nil {
+	if db.DB != nil {
 		// Flush all pending WAL changes into the main DB
-		if _, err := db.Exec("PRAGMA wal_checkpoint(FULL);"); err != nil {
+		if _, err := db.DB.Exec("PRAGMA wal_checkpoint(FULL);"); err != nil {
 			log.Printf("Failed to checkpoint WAL: %v", err)
 		}
 
-		if err := db.Close(); err != nil {
+		if err := db.DB.Close(); err != nil {
 			log.Printf("Failed to close DB: %v", err)
 		}
 	}
 
-	if c != nil {
-		c.Stop()
+	if jobs.C != nil {
+		jobs.C.Stop()
 	}
 }

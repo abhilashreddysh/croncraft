@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"database/sql"
@@ -14,7 +14,7 @@ const (
 )
 
 // retryDBOperation retries a database operation if it fails due to locking
-func retryDBOperation(operation func() error) error {
+func RetryDBOperation(operation func() error) error {
 	var err error
 	for i := 0; i < maxDBRetries; i++ {
 		err = operation()
@@ -40,7 +40,7 @@ func isDBLockedError(err error) bool {
 		err.Error() == "database is locked (5) (SQLITE_BUSY)")
 }
 
-func cleanupEmptyLogs(logDir string) {
+func CleanupEmptyLogs(logDir string) {
     files, err := os.ReadDir(logDir)
     if err != nil {
         log.Printf("Failed to read log dir for cleanup: %v", err)
@@ -64,17 +64,17 @@ func cleanupEmptyLogs(logDir string) {
 
 
 // Helper function to format date for display
-func formatDate(t time.Time) string {
+func FormatDate(t time.Time) string {
     return t.Format("Jan 2, 2006")
 }
 
 // Helper function to format time for display
-func formatTime(t time.Time) string {
+func FormatTime(t time.Time) string {
     return t.Format("3:04 PM")
 }
 
 // Helper function to format file size in bytes to human-readable format
-func formatFileSize(bytes int64) string {
+func FormatFileSize(bytes int64) string {
     const unit = 1024
     if bytes < unit {
         return fmt.Sprintf("%d B", bytes)
@@ -91,7 +91,7 @@ func formatFileSize(bytes int64) string {
 }
 
 // Helper function to format duration in milliseconds to human-readable format
-func formatDuration(ms int64) string {
+func FormatDuration(ms int64) string {
     if ms < 1000 {
         return fmt.Sprintf("%dms", ms)
     }
@@ -148,7 +148,7 @@ func timeAgo(t time.Time) string {
 	}
 }
 
-func nullTimeAgo(ns sql.NullString) string {
+func NullTimeAgo(ns sql.NullString) string {
 	if !ns.Valid {
 		return ""
 	}

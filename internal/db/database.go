@@ -1,4 +1,4 @@
-package main
+package db
 
 import (
 	"database/sql"
@@ -7,11 +7,16 @@ import (
 	"os"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/abhilashreddysh/croncraft/internal/models"
+	"github.com/abhilashreddysh/croncraft/internal/utils"
 )
 
-var db *sql.DB
+const (MaxLogsPerJob = 10)
 
-func initializeDatabase() error {
+var DB *sql.DB
+
+func InitializeDatabase(dbFile string) error {
 	// Create DB file if it doesn't exist
 	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
 		file, err := os.Create(dbFile)
@@ -22,28 +27,28 @@ func initializeDatabase() error {
 	}
 
 	var err error
-	db, err = sql.Open("sqlite", dbFile)
+	DB, err = sql.Open("sqlite", dbFile)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Set connection pool parameters
-	db.SetMaxOpenConns(1) // Critical for SQLite to avoid locking issues
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(0) // Connections don't timeout
+	DB.SetMaxOpenConns(1) // Critical for SQLite to avoid locking issues
+	DB.SetMaxIdleConns(1)
+	DB.SetConnMaxLifetime(0) // Connections don't timeout
 
 	// Verify connection
-	if err = db.Ping(); err != nil {
+	if err = DB.Ping(); err != nil {
 		return fmt.Errorf("database ping failed: %w", err)
 	}
 
 	// Enable WAL mode for better concurrency
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+	if _, err := DB.Exec("PRAGMA journal_mode=WAL;"); err != nil {
 		log.Printf("Failed to enable WAL mode: %v", err)
 	}
 
 	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys=ON;"); err != nil {
+	if _, err := DB.Exec("PRAGMA foreign_keys=ON;"); err != nil {
 		log.Printf("Failed to enable foreign keys: %v", err)
 	}
 
@@ -80,7 +85,7 @@ func initializeDatabase() error {
 	}
 
 	for _, query := range queries {
-		if _, err := db.Exec(query); err != nil {
+		if _, err := DB.Exec(query); err != nil {
 			return fmt.Errorf("failed to execute query %s: %w", query, err)
 		}
 	}
@@ -88,11 +93,11 @@ func initializeDatabase() error {
 	return nil
 }
 
-func getJobsFromDB() ([]Job, error) {
-	var jobs []Job
+func GetJobsFromDB() ([]models.Job, error) {
+	var jobs []models.Job
 
-	err := retryDBOperation(func() error {
-		rows, err := db.Query(`
+	err := utils.RetryDBOperation(func() error {
+		rows, err := DB.Query(`
     SELECT j.id, j.name, j.schedule, j.command, j.status,
            COALESCE((
                SELECT MAX(r.run_at)
@@ -107,13 +112,13 @@ func getJobsFromDB() ([]Job, error) {
 		defer rows.Close()
 
 		for rows.Next() {
-			var j Job
+			var j models.Job
 			var lastRun sql.NullString // or sql.NullTime if it's a DATETIME
 			if err := rows.Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &j.Status, &lastRun); err != nil {
 				log.Printf("Failed to scan job row: %v", err)
 				continue
 			}
-			j.LastRun = nullTimeAgo(lastRun)
+			j.LastRun = utils.NullTimeAgo(lastRun)
 			jobs = append(jobs, j)
 		}
 		return rows.Err()
@@ -126,52 +131,4 @@ func getJobsFromDB() ([]Job, error) {
 	return jobs, nil
 }
 
-func pruneLogs(jobID int) error {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	rows, err := db.Query(`
-		SELECT id FROM job_runs 
-		WHERE id NOT IN (
-			SELECT id FROM job_runs 
-			WHERE job_id = ? 
-			ORDER BY run_at DESC 
-			LIMIT ?
-		) AND job_id = ?`,
-		jobID, MaxLogsPerJob, jobID,
-	)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	var oldIDs []int
-	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
-			return err
-		}
-		oldIDs = append(oldIDs, id)
-	}
-
-	for _, id := range oldIDs {
-		logFilePath := fmt.Sprintf("./logs/%d.log", id)
-		if err := os.Remove(logFilePath); err != nil && !os.IsNotExist(err) {
-			log.Printf("Failed to delete log file %s: %v", logFilePath, err)
-		}
-	}
-
-	_, err = db.Exec(`
-		DELETE FROM job_runs 
-		WHERE id NOT IN (
-			SELECT id FROM job_runs 
-			WHERE job_id = ? 
-			ORDER BY run_at DESC 
-			LIMIT ?
-		) AND job_id = ?`,
-		jobID, MaxLogsPerJob, jobID,
-	)
-
-	return err
-}
 

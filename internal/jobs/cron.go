@@ -1,4 +1,4 @@
-package main
+package jobs
 
 import (
 	"bufio"
@@ -10,43 +10,46 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abhilashreddysh/croncraft/internal/db"
+	"github.com/abhilashreddysh/croncraft/internal/models"
+	"github.com/abhilashreddysh/croncraft/internal/utils"
 	"github.com/robfig/cron/v3"
 )
 
 var (
-	c       *cron.Cron
-	cronMap map[int]cron.EntryID
-	mu      sync.RWMutex // For thread-safe access to cronMap
-	dbMu    sync.Mutex   // For serializing database write operations
+	C       *cron.Cron
+	CronMap map[int]cron.EntryID
+	Mu      sync.RWMutex // For thread-safe access to cronMap
+	DbMu    sync.Mutex   // For serializing database write operations
 )
 
-func initializeCron() {
-	c = cron.New()
-	cronMap = make(map[int]cron.EntryID)
-	c.Start()
+func InitializeCron() {
+	C = cron.New()
+	CronMap = make(map[int]cron.EntryID)
+	C.Start()
 }
 
-func loadJobs() {
-	jobs, err := getJobsFromDB()
+func LoadJobs() {
+	jobs, err := db.GetJobsFromDB()
 	if err != nil {
 		log.Printf("Failed to load jobs: %v", err)
 		return
 	}
 
 	for _, job := range jobs {
-		registerCron(job)
+		RegisterCron(job)
 	}
 }
 
-func registerCron(j Job) {
+func RegisterCron(j models.Job) {
     
     if !j.Status {
 		log.Printf("Skipping job %s (disabled)", j.Name)
 		return
 	}
 
-	id, err := c.AddFunc(j.Schedule, func() {
-		runJob(j.ID, j.Name, j.Command)
+	id, err := C.AddFunc(j.Schedule, func() {
+		RunJob(j.ID, j.Name, j.Command)
 	})
 
 	if err != nil {
@@ -54,12 +57,12 @@ func registerCron(j Job) {
 		return
 	}
 
-	mu.Lock()
-	cronMap[j.ID] = id
-	mu.Unlock()
+	Mu.Lock()
+	CronMap[j.ID] = id
+	Mu.Unlock()
 }
 
-func runJob(jobID int, name, command string) {
+func RunJob(jobID int, name, command string) {
     runAt := time.Now().Format(time.RFC3339)
     const maxDBOutput = 500 * 1024       // 500 KB preview in DB
     const batchInterval = 2 * time.Second
@@ -67,8 +70,8 @@ func runJob(jobID int, name, command string) {
     startTime := time.Now() // track duration
 
     var runRowID int64
-    err := retryDBOperation(func() error {
-        res, err := db.Exec(
+    err := utils.RetryDBOperation(func() error {
+        res, err := db.DB.Exec(
             "INSERT INTO job_runs (job_id, run_at, status, output) VALUES (?, ?, ?, ?)",
             jobID, runAt, "running", "",
         )
@@ -142,8 +145,8 @@ func runJob(jobID int, name, command string) {
             if truncated {
                 tempOutput += "... (truncated)\n"
             }
-            _ = retryDBOperation(func() error {
-                _, err := db.Exec("UPDATE job_runs SET output = ? WHERE id = ?", tempOutput, runRowID)
+            _ = utils.RetryDBOperation(func() error {
+                _, err := db.DB.Exec("UPDATE job_runs SET output = ? WHERE id = ?", tempOutput, runRowID)
                 return err
             })
             lastUpdate = time.Now()
@@ -163,8 +166,8 @@ func runJob(jobID int, name, command string) {
     if truncated {
         finalOutput += "... (truncated)\n"
     }
-    _ = retryDBOperation(func() error {
-        _, err := db.Exec(
+    _ = utils.RetryDBOperation(func() error {
+        _, err := db.DB.Exec(
             "UPDATE job_runs SET status = ?, duration_ms = ?, output = ? WHERE id = ?",
             status, duration.Milliseconds(), finalOutput, runRowID,
         )
@@ -172,7 +175,7 @@ func runJob(jobID int, name, command string) {
     })
 
     // Optional: prune old logs
-    _ = retryDBOperation(func() error {
+    _ = utils.RetryDBOperation(func() error {
         return pruneLogs(jobID)
     })
 }

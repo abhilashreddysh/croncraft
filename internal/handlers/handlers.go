@@ -1,4 +1,4 @@
-package main
+package handlers
 
 import (
 	"database/sql"
@@ -14,13 +14,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
+	"github.com/abhilashreddysh/croncraft/internal/db"
+	"github.com/abhilashreddysh/croncraft/internal/jobs"
+	"github.com/abhilashreddysh/croncraft/internal/models"
+	"github.com/abhilashreddysh/croncraft/internal/utils"
 )
 
 //go:embed templates/*
 var templatesFS embed.FS
 
-func setupHTTPHandlers() {
+func SetupHTTPHandlers() {
 	// Static files	
 	http.HandleFunc("/style.css", serveStaticFile("text/css", "templates/static/style.css"))
 
@@ -28,7 +31,7 @@ func setupHTTPHandlers() {
 	http.HandleFunc("/", overviewHandler)
 	http.HandleFunc("/add", addJobHandler)
 	http.HandleFunc("/run/", runHandler)
-	http.HandleFunc("/delete/", deleteHandler)
+	http.HandleFunc("/delete/", deleteJobHandler)
 	http.HandleFunc("/edit/", func(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -68,7 +71,7 @@ func overviewHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jobs, err := getJobsFromDB()
+	jobs, err := db.GetJobsFromDB()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("DB error: %v", err), http.StatusInternalServerError)
 		return
@@ -96,53 +99,25 @@ func overviewHandler(w http.ResponseWriter, r *http.Request) {
 func addJobHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		// Serve the add job form
 		tmpl := template.Must(template.ParseFS(
 			templatesFS,
 			"templates/base.html",
-			"templates/add.html",    
-            "templates/modals/schedule_helper.html",
+			"templates/add.html",
+			"templates/modals/schedule_helper.html",
 		))
-		if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{"ActivePage": "add"}); err != nil {
-			http.Error(w, fmt.Sprintf("Template error: %v", err), http.StatusInternalServerError)
-		}
+		_ = tmpl.ExecuteTemplate(w, "base", map[string]interface{}{"ActivePage": "add"})
 
 	case http.MethodPost:
-		// Process form submission
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Invalid form data", http.StatusBadRequest)
-			return
-		}
-
-		name := r.FormValue("name")
-		schedule := r.FormValue("schedule")
-		command := r.FormValue("command")
-		status := r.FormValue("enabled") == "on"
-
-		if name == "" || schedule == "" || command == "" {
-			http.Error(w, "All fields are required", http.StatusBadRequest)
-			return
-		}
-
-		// Validate cron expression
-		if _, err := cron.ParseStandard(schedule); err != nil {
-			http.Error(w, "Invalid cron expression: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		res, err := db.Exec(
-			"INSERT INTO jobs(name, schedule, command, status) VALUES(?, ?, ?, ?)",
-			name, schedule, command, status,
-		)
-
+		job, err := utils.ParseJobForm(r)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to add job: %v", err), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		id, _ := res.LastInsertId()
-		j := Job{ID: int(id), Name: name, Schedule: schedule, Command: command}
-		registerCron(j)
+		if err := UpsertJob(job); err != nil {
+			http.Error(w, "Failed to add job: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 
@@ -150,6 +125,8 @@ func addJobHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
+
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -163,8 +140,8 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var j Job
-	err = db.QueryRow("SELECT name, command FROM jobs WHERE id = ?", id).
+	var j models.Job
+	err = db.DB.QueryRow("SELECT name, command FROM jobs WHERE id = ?", id).
 		Scan(&j.Name, &j.Command)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -175,126 +152,29 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go runJob(id, j.Name, j.Command)
+	go jobs.RunJob(id, j.Name, j.Command)
 	w.Write([]byte("Job started in background"))
 }
 
-func deleteHandler(w http.ResponseWriter, r *http.Request) {
+// deleteJobHandler deletes a job from DB and cron scheduler
+func deleteJobHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	id, err := strconv.Atoi(r.URL.Path[len("/delete/"):])
-	if err != nil {
-		http.Error(w, "Invalid job ID", http.StatusBadRequest)
-		return
-	}
+	idStr := strings.TrimPrefix(r.URL.Path, "/delete/")
+	jobID, _ := strconv.Atoi(idStr)
 
-	mu.Lock()
-	if entryID, ok := cronMap[id]; ok {
-		c.Remove(entryID)
-		delete(cronMap, id)
-	}
-	mu.Unlock()
-
-	// Use transaction for atomic deletion
-	tx, err := db.Begin()
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback() // Will be ignored if tx is committed
-
-	_, err = tx.Exec("DELETE FROM jobs WHERE id = ?", id)
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-
-	_, err = tx.Exec("DELETE FROM job_runs WHERE job_id = ?", id)
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-
-	if err = tx.Commit(); err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+	if err := DeleteJob(jobID, true); err != nil {
+		http.Error(w, "Failed to delete job: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// func logsHandler(w http.ResponseWriter, r *http.Request) {
-//     if r.Method != http.MethodGet {
-//         http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-//         return
-//     }
 
-//     // Parse job ID from /logs/{jobID}
-//     id, err := strconv.Atoi(r.URL.Path[len("/logs/"):])
-//     if err != nil {
-//         http.Error(w, "Invalid job ID", http.StatusBadRequest)
-//         return
-//     }
-
-//     // Fetch job info
-//     var j Job
-//     err = db.QueryRow("SELECT id, name FROM jobs WHERE id = ?", id).
-//         Scan(&j.ID, &j.Name)
-//     if errors.Is(err, sql.ErrNoRows) {
-//         http.Error(w, "Job not found", http.StatusNotFound)
-//         return
-//     } else if err != nil {
-//         http.Error(w, "Database error", http.StatusInternalServerError)
-//         return
-//     }
-
-//     // Fetch runs for this job (NO output here, just ID + metadata)
-//     rows, err := db.Query(
-//         "SELECT id, run_at, status FROM job_runs WHERE job_id = ? ORDER BY run_at DESC",
-//         id,
-//     )
-//     if err != nil {
-//         http.Error(w, "Database error", http.StatusInternalServerError)
-//         return
-//     }
-//     defer rows.Close()
-
-//     var logs []Run
-//     for rows.Next() {
-//         var logEntry Run
-//         if err := rows.Scan(&logEntry.ID, &logEntry.RunAt, &logEntry.Status); err != nil {
-//             log.Printf("Failed to scan log row: %v", err)
-//             continue
-//         }
-//         logs = append(logs, logEntry)
-//     }
-//     if err := rows.Err(); err != nil {
-//         http.Error(w, "Database error", http.StatusInternalServerError)
-//         return
-//     }
-
-//     // Render template
-// 	tmpl, err := template.ParseFS(templatesFS,
-// 		"templates/base.html",
-// 		"templates/logs.html",
-// 	)
-// 	if err != nil {
-// 		http.Error(w, fmt.Sprintf("Template parse error: %v", err), http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	if err := tmpl.ExecuteTemplate(w, "base", map[string]interface{}{
-// 		"Job":  j,
-// 		"Logs": logs,
-// 	}); err != nil {
-// 		log.Printf("Template execution error: %v", err)
-// 		http.Error(w, "Template execution failed", http.StatusInternalServerError)
-// 	}
-
-// }
 
 func outputHandler(w http.ResponseWriter, r *http.Request) {
     if r.Method != http.MethodGet {
@@ -321,9 +201,9 @@ func outputHandler(w http.ResponseWriter, r *http.Request) {
         w.Header().Set("Content-Type", "text/plain; charset=utf-8")
     }
 
-    // 1️⃣ Stream SQLite preview first
+    // Stream SQLite preview first
     var preview string
-    err = db.QueryRow("SELECT output FROM job_runs WHERE id = ?", runID).Scan(&preview)
+    err = db.DB.QueryRow("SELECT output FROM job_runs WHERE id = ?", runID).Scan(&preview)
     if err != nil && !errors.Is(err, sql.ErrNoRows) {
         http.Error(w, "Database error", http.StatusInternalServerError)
         return
@@ -366,7 +246,7 @@ func outputHandler(w http.ResponseWriter, r *http.Request) {
     if !contentWritten {
         _, _ = io.WriteString(w, "⚠️ No log output available for this run.\n")
     }
-	cleanupEmptyLogs("./logs")
+	utils.CleanupEmptyLogs("./logs")
 }
 
 
@@ -384,9 +264,9 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var j Job
+	var j models.Job
 	var lastRun,Created,Updated sql.NullString
-	err = db.QueryRow(`SELECT j.id, j.name, j.schedule, j.command, j.status, j.created_at, j.updated_at,
+	err = db.DB.QueryRow(`SELECT j.id, j.name, j.schedule, j.command, j.status, j.created_at, j.updated_at,
 						COALESCE((SELECT MAX(r.run_at) FROM job_runs r WHERE r.job_id = j.id), '') AS last_run 
 						FROM jobs j WHERE id = ?`, id).Scan(&j.ID, &j.Name, &j.Schedule, &j.Command, &j.Status, &Created, &Updated, &lastRun)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -397,9 +277,9 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	j.CreatedAt = nullTimeAgo(Created)
-	j.UpdatedAt = nullTimeAgo(Updated)
-	j.LastRun   = nullTimeAgo(lastRun)
+	j.CreatedAt = utils.NullTimeAgo(Created)
+	j.UpdatedAt = utils.NullTimeAgo(Updated)
+	j.LastRun   = utils.NullTimeAgo(lastRun)
 
 	tmpl := template.Must(template.ParseFS(
 	templatesFS,
@@ -414,67 +294,35 @@ func editJobFormHandler(w http.ResponseWriter, r *http.Request) {
 }
 // POST /edit/{id}
 func editJobSubmitHandler(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodPost {
-        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-        return
-    }
-
-    idStr := strings.TrimPrefix(r.URL.Path, "/edit/")
-    id, err := strconv.Atoi(idStr)
-    if err != nil {
-        http.Error(w, "Invalid job ID", http.StatusBadRequest)
-        return
-    }
-
-    if err := r.ParseForm(); err != nil {
-        http.Error(w, "Invalid form data", http.StatusBadRequest)
-        return
-    }
-
-	name := r.FormValue("name")
-	schedule := r.FormValue("schedule")
-	command := r.FormValue("command")
-	status := r.FormValue("enabled") == "on" // true/false
-
-	statusInt := 0
-	if status {
-		statusInt = 1
-	}
-
-	_, err = db.Exec(`
-		UPDATE jobs 
-		SET name = ?, schedule = ?, command = ?, status = ? 
-		WHERE id = ?`,
-		name, schedule, command, statusInt, id,
-	)
-	if err != nil {
-		http.Error(w, "Database update failed", http.StatusInternalServerError)
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-    if entryID, ok := cronMap[id]; ok {
-        c.Remove(entryID)
-    }
+	idStr := strings.TrimPrefix(r.URL.Path, "/edit/")
+	jobID, _ := strconv.Atoi(idStr)
 
-    newEntryID, err := c.AddFunc(schedule, func() {
-        runJob(id, name, command)
-    })
-    if err != nil {
-        log.Printf("Failed to update cron for job %d: %v", id, err)
-        http.Error(w, "Failed to update cron schedule", http.StatusInternalServerError)
-        return
-    }
+	job, err := utils.ParseJobForm(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	job.ID = jobID
 
-    cronMap[id] = newEntryID
+	if err := UpsertJob(job); err != nil {
+		http.Error(w, "Failed to update job: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-    http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// TEsting
+
+
 func createTemplate() *template.Template {
     return template.New("").Funcs(template.FuncMap{
-        "formatDate": formatDate,
-        "formatTime": formatTime,
+        "formatDate": utils.FormatDate,
+        "formatTime": utils.FormatTime,
     })
 }
 
@@ -492,8 +340,8 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     // Fetch job info
-    var j Job
-    err = db.QueryRow("SELECT id, name FROM jobs WHERE id = ?", id).
+    var j models.Job
+    err = db.DB.QueryRow("SELECT id, name FROM jobs WHERE id = ?", id).
         Scan(&j.ID, &j.Name)
     if errors.Is(err, sql.ErrNoRows) {
         http.Error(w, "Job not found", http.StatusNotFound)
@@ -504,7 +352,7 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     // Fetch runs for this job with additional metadata
-    rows, err := db.Query(`
+    rows, err := db.DB.Query(`
         SELECT 
             id, 
             run_at, 
@@ -521,9 +369,9 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
     }
     defer rows.Close()
 
-    var logs []Run
+    var logs []models.Run
     for rows.Next() {
-        var logEntry Run
+        var logEntry models.Run
         var runAtStr string
         var durationMs sql.NullInt64
         var outputSize sql.NullInt64
@@ -549,12 +397,12 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
         
         // Convert duration to human-readable format
         if durationMs.Valid {
-            logEntry.Duration = formatDuration(durationMs.Int64)
+            logEntry.Duration = utils.FormatDuration(durationMs.Int64)
         }
         
         // Convert output size to human-readable format
         if outputSize.Valid {
-            logEntry.OutputSize = formatFileSize(outputSize.Int64)
+            logEntry.OutputSize = utils.FormatFileSize(outputSize.Int64)
         }
         
         logs = append(logs, logEntry)
